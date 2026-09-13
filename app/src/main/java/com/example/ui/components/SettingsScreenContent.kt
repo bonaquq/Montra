@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -97,6 +98,7 @@ fun SettingsScreenContent(
     onToggleBiometric: (Boolean) -> Unit = {},
     onLockAppNow: () -> Unit = {},
     onClearAllTransactions: () -> Unit = {},
+    onOpenDeveloperOptions: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -397,6 +399,15 @@ fun SettingsScreenContent(
                     value = null,
                     onClick = { isAboutDialogOpen = true },
                     modifier = Modifier.testTag("item_settings_about")
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+
+                SettingsItemRow(
+                    icon = Icons.Filled.Terminal,
+                    title = "Developer Options",
+                    value = if (uiState.isDeveloperUnlocked) "Unlocked" else "Passcode Required",
+                    onClick = onOpenDeveloperOptions,
+                    modifier = Modifier.testTag("item_settings_developer_options")
                 )
                 Spacer(modifier = Modifier.height(24.dp))
             }

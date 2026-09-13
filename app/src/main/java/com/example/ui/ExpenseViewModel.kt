@@ -154,7 +154,8 @@ data class ExpenseUiState(
     val isDarkMode: Boolean = true,
     val isBiometricEnabled: Boolean = false,
     val isAppUnlocked: Boolean = true,
-    val biometricErrorMessage: String? = null
+    val biometricErrorMessage: String? = null,
+    val isDeveloperUnlocked: Boolean = false
 )
 
 class ExpenseViewModel(application: Application) : AndroidViewModel(application) {
@@ -252,6 +253,9 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
     private val _biometricErrorMessage = MutableStateFlow<String?>(null)
     val biometricErrorMessage: StateFlow<String?> = _biometricErrorMessage
 
+    private val _isDeveloperUnlocked = MutableStateFlow(false)
+    val isDeveloperUnlocked: StateFlow<Boolean> = _isDeveloperUnlocked
+
     private data class AuthState(
         val user: com.example.auth.AuthUser?,
         val isLoading: Boolean,
@@ -307,7 +311,8 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
         val isDarkMode: Boolean,
         val isBiometricEnabled: Boolean,
         val isAppUnlocked: Boolean,
-        val biometricError: String?
+        val biometricError: String?,
+        val isDeveloperUnlocked: Boolean
     )
 
     @Suppress("UNCHECKED_CAST")
@@ -332,7 +337,8 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
         _isDarkMode,
         _isBiometricEnabled,
         _isAppUnlocked,
-        _biometricErrorMessage
+        _biometricErrorMessage,
+        _isDeveloperUnlocked
     ) { args: Array<Any?> ->
         FilterCriteria(
             timeRange = args[0] as TimeRange,
@@ -355,7 +361,8 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
             isDarkMode = args[17] as Boolean,
             isBiometricEnabled = args[18] as Boolean,
             isAppUnlocked = args[19] as Boolean,
-            biometricError = args[20] as? String
+            biometricError = args[20] as? String,
+            isDeveloperUnlocked = args[21] as Boolean
         )
     }
 
@@ -712,7 +719,8 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
             isDarkMode = criteria.isDarkMode,
             isBiometricEnabled = criteria.isBiometricEnabled,
             isAppUnlocked = criteria.isAppUnlocked,
-            biometricErrorMessage = criteria.biometricError
+            biometricErrorMessage = criteria.biometricError,
+            isDeveloperUnlocked = criteria.isDeveloperUnlocked
         )
     }.stateIn(
         scope = viewModelScope,
@@ -1466,5 +1474,109 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             repository.deleteCustomCategoryById(id)
         }
+    }
+
+    // Developer Mode Operations
+    fun setDeveloperUnlocked(unlocked: Boolean) {
+        _isDeveloperUnlocked.value = unlocked
+    }
+
+    fun injectDeveloperSampleData() {
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            val dayMillis = 86_400_000L
+            val sampleItems = listOf(
+                Expense(
+                    title = "Monthly Software Engineering Salary",
+                    amount = 4500.0,
+                    category = "SALARY",
+                    dateMillis = now - dayMillis * 1,
+                    note = "Dev Test Payroll deposit",
+                    transactionType = "INCOME"
+                ),
+                Expense(
+                    title = "Freelance Mobile Consulting",
+                    amount = 850.0,
+                    category = "OTHER",
+                    dateMillis = now - dayMillis * 3,
+                    note = "Android app architecture consultation",
+                    transactionType = "INCOME"
+                ),
+                Expense(
+                    title = "Whole Foods Organic Market",
+                    amount = 124.50,
+                    category = "FOOD",
+                    dateMillis = now - (dayMillis * 0.4).toLong(),
+                    note = "Groceries & organic produce",
+                    transactionType = "EXPENSE"
+                ),
+                Expense(
+                    title = "Blue Bottle Specialty Coffee",
+                    amount = 7.75,
+                    category = "FOOD",
+                    dateMillis = now - 3600_000L * 3,
+                    note = "Pour-over espresso & croissant",
+                    transactionType = "EXPENSE"
+                ),
+                Expense(
+                    title = "Electric & Fiber Gigabit Internet",
+                    amount = 145.00,
+                    category = "UTILITIES",
+                    dateMillis = now - dayMillis * 4,
+                    note = "Monthly utility bundle",
+                    transactionType = "EXPENSE"
+                ),
+                Expense(
+                    title = "Downtown Studio Apartment Rent",
+                    amount = 950.00,
+                    category = "RENT",
+                    dateMillis = now - dayMillis * 5,
+                    note = "September monthly lease",
+                    transactionType = "EXPENSE"
+                ),
+                Expense(
+                    title = "Uber Airport Express Ride",
+                    amount = 42.80,
+                    category = "TRANSPORT",
+                    dateMillis = now - dayMillis * 2,
+                    note = "Terminal 2 transfer",
+                    transactionType = "EXPENSE"
+                ),
+                Expense(
+                    title = "Mechanical Keyboard & USB-C Dock",
+                    amount = 189.00,
+                    category = "SHOPPING",
+                    dateMillis = now - dayMillis * 6,
+                    note = "Dev workstation upgrade",
+                    transactionType = "EXPENSE"
+                )
+            )
+            sampleItems.forEach { repository.insert(it) }
+        }
+    }
+
+    fun injectSingleMockTransaction(title: String, amount: Double, category: String, isIncome: Boolean) {
+        viewModelScope.launch {
+            repository.insert(
+                Expense(
+                    title = title,
+                    amount = amount,
+                    category = category,
+                    dateMillis = System.currentTimeMillis(),
+                    note = "Dev injected transaction",
+                    transactionType = if (isIncome) "INCOME" else "EXPENSE"
+                )
+            )
+        }
+    }
+
+    fun simulateReceiptScan() {
+        _scannedReceiptResult.value = ParsedReceiptData(
+            merchantOrTitle = "Trader Joe's",
+            amount = 48.75,
+            categoryHint = "FOOD",
+            dateMillis = System.currentTimeMillis(),
+            rawNotes = "Simulated receipt scan by Dev Console"
+        )
     }
 }

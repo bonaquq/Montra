@@ -32,6 +32,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CalendarToday
@@ -39,6 +40,8 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.LocalOffer
+import androidx.compose.material.icons.filled.PieChart
+import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -48,6 +51,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -75,6 +79,7 @@ import androidx.compose.ui.window.Dialog
 import com.example.data.CategoryRegistry
 import com.example.data.ExpenseCategory
 import com.example.data.SupportedCurrency
+import com.example.ui.BudgetStatus
 import com.example.ui.theme.MontraBackground
 import com.example.ui.theme.MontraBorder
 import com.example.ui.theme.MontraButtonBg
@@ -87,18 +92,29 @@ import com.example.ui.theme.MontraTextSecondary
 import com.example.util.DateUtils
 import com.example.util.ParsedReceiptData
 
+enum class AddExpenseTab {
+    EXPENSE,
+    INCOME,
+    BUDGET
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddExpenseScreen(
     onBack: () -> Unit,
     onAddExpense: (amount: Double, category: String, dateMillis: Long, description: String, isIncome: Boolean) -> Unit,
+    onSaveBudget: ((category: String, limit: Double) -> Unit)? = null,
+    budgetStatuses: List<BudgetStatus> = emptyList(),
     onScanReceipt: ((Uri) -> Unit)? = null,
     isScanningReceipt: Boolean = false,
     scannedReceiptResult: ParsedReceiptData? = null,
     onClearScannedReceipt: (() -> Unit)? = null,
     selectedCurrency: SupportedCurrency = SupportedCurrency.USD,
+    isDeveloperMode: Boolean = false,
+    initialTab: AddExpenseTab = AddExpenseTab.EXPENSE,
     modifier: Modifier = Modifier
 ) {
+    var currentTab by remember { mutableStateOf(initialTab) }
     var amountText by remember { mutableStateOf("") }
     var selectedCategoryKey by remember { mutableStateOf(ExpenseCategory.FOOD.name) }
     val selectedCategoryItem = CategoryRegistry.getCategoryItem(selectedCategoryKey)
@@ -109,6 +125,12 @@ fun AddExpenseScreen(
     var isIncome by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var scanNotice by remember { mutableStateOf<String?>(null) }
+
+    // Budget Tab specific state
+    var isOverallBudget by remember { mutableStateOf(false) }
+    var budgetCategoryKey by remember { mutableStateOf(ExpenseCategory.FOOD.name) }
+    var budgetAmountText by remember { mutableStateOf("") }
+    var budgetSuccessMessage by remember { mutableStateOf<String?>(null) }
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
@@ -164,7 +186,11 @@ fun AddExpenseScreen(
             }
 
             Text(
-                text = if (isIncome) "Add Income" else "Add Expense",
+                text = when (currentTab) {
+                    AddExpenseTab.EXPENSE -> "Add Expense"
+                    AddExpenseTab.INCOME -> "Add Income"
+                    AddExpenseTab.BUDGET -> "Add Monthly Budget"
+                },
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = MontraTextPrimary,
@@ -174,7 +200,7 @@ fun AddExpenseScreen(
             )
         }
 
-        // Segmented Control Tabs for Expense vs Income
+        // Segmented Control Tabs for Expense vs Income vs Budget
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -189,15 +215,14 @@ fun AddExpenseScreen(
                 modifier = Modifier
                     .weight(1f)
                     .clip(RoundedCornerShape(10.dp))
-                    .background(if (!isIncome) MontraSurfaceElevated else Color.Transparent)
+                    .background(if (currentTab == AddExpenseTab.EXPENSE) MontraSurfaceElevated else Color.Transparent)
                     .clickable {
-                        if (isIncome) {
-                            isIncome = false
-                            if (selectedCategoryKey.equals(ExpenseCategory.INCOME.name, ignoreCase = true) ||
-                                selectedCategoryKey.equals("SALARY", ignoreCase = true)
-                            ) {
-                                selectedCategoryKey = ExpenseCategory.FOOD.name
-                            }
+                        currentTab = AddExpenseTab.EXPENSE
+                        isIncome = false
+                        if (selectedCategoryKey.equals(ExpenseCategory.INCOME.name, ignoreCase = true) ||
+                            selectedCategoryKey.equals("SALARY", ignoreCase = true)
+                        ) {
+                            selectedCategoryKey = ExpenseCategory.FOOD.name
                         }
                     }
                     .padding(vertical = 10.dp)
@@ -211,14 +236,14 @@ fun AddExpenseScreen(
                     Icon(
                         imageVector = Icons.Filled.ArrowDownward,
                         contentDescription = "Expense",
-                        tint = if (!isIncome) Color(0xFFF87171) else MontraTextMuted,
-                        modifier = Modifier.size(16.dp)
+                        tint = if (currentTab == AddExpenseTab.EXPENSE) Color(0xFFF87171) else MontraTextMuted,
+                        modifier = Modifier.size(15.dp)
                     )
                     Text(
                         text = "Expense",
-                        fontSize = 14.sp,
-                        fontWeight = if (!isIncome) FontWeight.Bold else FontWeight.Medium,
-                        color = if (!isIncome) MontraTextPrimary else MontraTextSecondary
+                        fontSize = 13.sp,
+                        fontWeight = if (currentTab == AddExpenseTab.EXPENSE) FontWeight.Bold else FontWeight.Medium,
+                        color = if (currentTab == AddExpenseTab.EXPENSE) MontraTextPrimary else MontraTextSecondary
                     )
                 }
             }
@@ -228,12 +253,11 @@ fun AddExpenseScreen(
                 modifier = Modifier
                     .weight(1f)
                     .clip(RoundedCornerShape(10.dp))
-                    .background(if (isIncome) MontraIncomeGreen.copy(alpha = 0.2f) else Color.Transparent)
+                    .background(if (currentTab == AddExpenseTab.INCOME) MontraIncomeGreen.copy(alpha = 0.2f) else Color.Transparent)
                     .clickable {
-                        if (!isIncome) {
-                            isIncome = true
-                            selectedCategoryKey = ExpenseCategory.INCOME.name
-                        }
+                        currentTab = AddExpenseTab.INCOME
+                        isIncome = true
+                        selectedCategoryKey = ExpenseCategory.INCOME.name
                     }
                     .padding(vertical = 10.dp)
                     .testTag("tab_switch_income"),
@@ -246,212 +270,692 @@ fun AddExpenseScreen(
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.TrendingUp,
                         contentDescription = "Income",
-                        tint = if (isIncome) MontraIncomeGreen else MontraTextMuted,
-                        modifier = Modifier.size(16.dp)
+                        tint = if (currentTab == AddExpenseTab.INCOME) MontraIncomeGreen else MontraTextMuted,
+                        modifier = Modifier.size(15.dp)
                     )
                     Text(
                         text = "Income",
-                        fontSize = 14.sp,
-                        fontWeight = if (isIncome) FontWeight.Bold else FontWeight.Medium,
-                        color = if (isIncome) MontraIncomeGreen else MontraTextSecondary
+                        fontSize = 13.sp,
+                        fontWeight = if (currentTab == AddExpenseTab.INCOME) FontWeight.Bold else FontWeight.Medium,
+                        color = if (currentTab == AddExpenseTab.INCOME) MontraIncomeGreen else MontraTextSecondary
+                    )
+                }
+            }
+
+            // Budget Tab
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(if (currentTab == AddExpenseTab.BUDGET) Color(0xFF6366F1).copy(alpha = 0.25f) else Color.Transparent)
+                    .clickable {
+                        currentTab = AddExpenseTab.BUDGET
+                        val targetKey = if (isOverallBudget) "OVERALL" else budgetCategoryKey
+                        val existing = budgetStatuses.firstOrNull { it.categoryName == targetKey }
+                        if (existing != null && existing.monthlyLimit > 0 && budgetAmountText.isEmpty()) {
+                            budgetAmountText = String.format(java.util.Locale.US, "%.0f", existing.monthlyLimit)
+                        }
+                    }
+                    .padding(vertical = 10.dp)
+                    .testTag("tab_switch_budget"),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.AccountBalanceWallet,
+                        contentDescription = "Budget",
+                        tint = if (currentTab == AddExpenseTab.BUDGET) Color(0xFF818CF8) else MontraTextMuted,
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Text(
+                        text = "Budget",
+                        fontSize = 13.sp,
+                        fontWeight = if (currentTab == AddExpenseTab.BUDGET) FontWeight.Bold else FontWeight.Medium,
+                        color = if (currentTab == AddExpenseTab.BUDGET) Color(0xFF818CF8) else MontraTextSecondary
                     )
                 }
             }
         }
 
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 12.dp)
-        ) {
-            errorMessage?.let { error ->
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFF3B1E22))
-                        .padding(horizontal = 14.dp, vertical = 10.dp)
-                ) {
-                    Text(text = error, color = Color(0xFFF87171), fontSize = 13.sp)
-                }
-                Spacer(modifier = Modifier.height(14.dp))
-            }
-
-            // Smart Receipt Scanning Card
-            Box(
+        if (currentTab == AddExpenseTab.BUDGET) {
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(MontraSurface)
-                    .border(1.dp, MontraButtonBg.copy(alpha = 0.5f), RoundedCornerShape(18.dp))
-                    .padding(16.dp)
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp, vertical = 12.dp)
             ) {
-                Column {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                // Success banner
+                budgetSuccessMessage?.let { success ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFF064E3B).copy(alpha = 0.5f))
+                            .border(1.dp, Color(0xFF10B981), RoundedCornerShape(12.dp))
+                            .padding(horizontal = 14.dp, vertical = 12.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(MontraButtonBg.copy(alpha = 0.2f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.DocumentScanner,
-                                    contentDescription = "OCR",
-                                    tint = MontraButtonBg,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                            Column {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Text(
-                                        text = "Smart Receipt Scan",
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MontraTextPrimary
-                                    )
-                                    Icon(
-                                        imageVector = Icons.Filled.AutoAwesome,
-                                        contentDescription = "AI",
-                                        tint = Color(0xFFFBBF24),
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                }
-                                Text(
-                                    text = "Auto-extract date, amount, & merchant",
-                                    fontSize = 12.sp,
-                                    color = MontraTextSecondary
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    if (isScanningReceipt) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(MontraSurfaceElevated)
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
-                                color = MontraButtonBg,
-                                strokeWidth = 2.dp
-                            )
-                            Text(
-                                text = "Analyzing paper receipt with OCR...",
-                                fontSize = 13.sp,
-                                color = MontraTextPrimary
-                            )
-                        }
-                    } else {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Button(
-                                onClick = {
-                                    photoPickerLauncher.launch(
-                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                    )
-                                },
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MontraButtonBg,
-                                    contentColor = MontraTextPrimary
-                                ),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(42.dp)
-                                    .testTag("btn_scan_receipt_picker")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.DocumentScanner,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(text = "Scan Receipt", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                            }
-
-                            // Quick sample receipt OCR button
-                            OutlinedButton(
-                                onClick = {
-                                    // Simulate OCR extraction from sample physical receipt
-                                    val sampleMerchants = listOf(
-                                        Triple("Starbucks Coffee", 6.85, ExpenseCategory.FOOD),
-                                        Triple("Whole Foods Market", 54.20, ExpenseCategory.SHOPPING),
-                                        Triple("Shell Gasoline", 38.50, ExpenseCategory.TRANSPORT),
-                                        Triple("CVS Pharmacy", 19.95, ExpenseCategory.HEALTH)
-                                    )
-                                    val picked = sampleMerchants.random()
-                                    amountText = String.format(java.util.Locale.US, "%.2f", picked.second)
-                                    description = picked.first
-                                    selectedCategoryKey = picked.third.name
-                                    dateMillis = System.currentTimeMillis()
-                                    scanNotice = "OCR Extracted: ${picked.first} • ${selectedCurrency.symbol}${String.format(java.util.Locale.US, "%.2f", picked.second)}"
-                                },
-                                shape = RoundedCornerShape(12.dp),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, MontraBorder),
-                                colors = ButtonDefaults.outlinedButtonColors(
-                                    contentColor = MontraTextSecondary
-                                ),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(42.dp)
-                                    .testTag("btn_sample_receipt")
-                            ) {
-                                Text(text = "Sample Receipt", fontSize = 13.sp)
-                            }
-                        }
-                    }
-
-                    scanNotice?.let { notice ->
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(Color(0xFF064E3B).copy(alpha = 0.5f))
-                                .padding(horizontal = 10.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
                             Icon(
                                 imageVector = Icons.Filled.CheckCircle,
-                                contentDescription = "Scanned",
+                                contentDescription = null,
                                 tint = Color(0xFF10B981),
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(20.dp)
                             )
                             Text(
-                                text = notice,
-                                fontSize = 12.sp,
+                                text = success,
                                 color = Color(0xFFA7F3D0),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
                                 modifier = Modifier.weight(1f)
                             )
                         }
                     }
+                    Spacer(modifier = Modifier.height(14.dp))
+                }
+
+                errorMessage?.let { error ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFF3B1E22))
+                            .padding(horizontal = 14.dp, vertical = 10.dp)
+                    ) {
+                        Text(text = error, color = Color(0xFFF87171), fontSize = 13.sp)
+                    }
+                    Spacer(modifier = Modifier.height(14.dp))
+                }
+
+                // Scope selector: Overall vs Category
+                Text(
+                    text = "Budget Target",
+                    fontSize = 13.sp,
+                    color = MontraTextSecondary,
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(MontraSurface)
+                        .padding(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    // Overall
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (isOverallBudget) Color(0xFF6366F1).copy(alpha = 0.25f) else Color.Transparent)
+                            .clickable {
+                                isOverallBudget = true
+                                val existing = budgetStatuses.firstOrNull { it.categoryName == "OVERALL" }
+                                if (existing != null && existing.monthlyLimit > 0) {
+                                    budgetAmountText = String.format(java.util.Locale.US, "%.0f", existing.monthlyLimit)
+                                }
+                            }
+                            .padding(vertical = 10.dp)
+                            .testTag("btn_budget_target_overall"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.AccountBalanceWallet,
+                                contentDescription = null,
+                                tint = if (isOverallBudget) Color(0xFF818CF8) else MontraTextMuted,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = "Overall Cap",
+                                fontSize = 13.sp,
+                                fontWeight = if (isOverallBudget) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isOverallBudget) Color(0xFF818CF8) else MontraTextSecondary
+                            )
+                        }
+                    }
+
+                    // Category
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (!isOverallBudget) Color(0xFF6366F1).copy(alpha = 0.25f) else Color.Transparent)
+                            .clickable {
+                                isOverallBudget = false
+                                val existing = budgetStatuses.firstOrNull { it.categoryName == budgetCategoryKey }
+                                if (existing != null && existing.monthlyLimit > 0) {
+                                    budgetAmountText = String.format(java.util.Locale.US, "%.0f", existing.monthlyLimit)
+                                }
+                            }
+                            .padding(vertical = 10.dp)
+                            .testTag("btn_budget_target_category"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.PieChart,
+                                contentDescription = null,
+                                tint = if (!isOverallBudget) Color(0xFF818CF8) else MontraTextMuted,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = "Category Budget",
+                                fontSize = 13.sp,
+                                fontWeight = if (!isOverallBudget) FontWeight.Bold else FontWeight.Medium,
+                                color = if (!isOverallBudget) Color(0xFF818CF8) else MontraTextSecondary
+                            )
+                        }
+                    }
+                }
+
+                // If Category Budget is selected: Category Selector
+                if (!isOverallBudget) {
+                    Spacer(modifier = Modifier.height(18.dp))
+                    Text(
+                        text = "Select Category",
+                        fontSize = 13.sp,
+                        color = MontraTextSecondary,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    val currentBudgetItem = CategoryRegistry.getCategoryItem(budgetCategoryKey)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(MontraSurface)
+                            .border(1.dp, MontraBorder, RoundedCornerShape(16.dp))
+                            .clickable { isCategoryPickerOpen = true }
+                            .padding(horizontal = 16.dp, vertical = 16.dp)
+                            .testTag("btn_select_budget_category")
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clip(CircleShape)
+                                        .background(currentBudgetItem.pastelBg),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = currentBudgetItem.icon,
+                                        contentDescription = null,
+                                        tint = currentBudgetItem.color,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                                Text(
+                                    text = currentBudgetItem.displayName,
+                                    fontSize = 15.sp,
+                                    color = MontraTextPrimary,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                                contentDescription = "Change",
+                                tint = MontraTextMuted,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // Monthly Limit Field
+                Text(
+                    text = "Monthly Limit Target",
+                    fontSize = 13.sp,
+                    color = MontraTextSecondary,
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MontraSurface)
+                        .border(1.dp, Color(0xFF6366F1).copy(alpha = 0.5f), RoundedCornerShape(16.dp))
+                        .padding(horizontal = 16.dp, vertical = 16.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = selectedCurrency.symbol,
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF818CF8),
+                            modifier = Modifier.padding(end = 10.dp)
+                        )
+                        BasicTextField(
+                            value = budgetAmountText,
+                            onValueChange = { budgetAmountText = it.filter { ch -> ch.isDigit() || ch == '.' } },
+                            textStyle = TextStyle(
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MontraTextPrimary
+                            ),
+                            cursorBrush = SolidColor(Color(0xFF818CF8)),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            singleLine = true,
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("input_budget_limit"),
+                            decorationBox = { innerTextField ->
+                                if (budgetAmountText.isEmpty()) {
+                                    Text(
+                                        text = "0.00",
+                                        fontSize = 22.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MontraTextMuted
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        )
+                    }
+                }
+
+                // Quick Preset Chips
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf(100.0, 250.0, 500.0, 1000.0).forEach { preset ->
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(MontraSurface)
+                                .border(0.5.dp, MontraBorder, RoundedCornerShape(10.dp))
+                                .clickable {
+                                    budgetAmountText = String.format(java.util.Locale.US, "%.0f", preset)
+                                }
+                                .padding(vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "${selectedCurrency.symbol}${preset.toInt()}",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MontraTextSecondary
+                            )
+                        }
+                    }
+                }
+
+                // Live Spending & Current Status Card
+                val activeKey = if (isOverallBudget) "OVERALL" else budgetCategoryKey
+                val currentStatus = budgetStatuses.firstOrNull { it.categoryName == activeKey }
+                Spacer(modifier = Modifier.height(20.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MontraSurface)
+                        .border(1.dp, MontraBorder, RoundedCornerShape(16.dp))
+                        .padding(16.dp)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.AccountBalanceWallet,
+                                    contentDescription = null,
+                                    tint = Color(0xFF818CF8),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = if (isOverallBudget) "Overall Monthly Status" else "${CategoryRegistry.getCategoryItem(budgetCategoryKey).displayName} Status",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MontraTextPrimary
+                                )
+                            }
+                            if (currentStatus != null && currentStatus.monthlyLimit > 0) {
+                                val isExceeded = currentStatus.percentUsed >= 100f
+                                val isApproaching = currentStatus.percentUsed >= 80f && currentStatus.percentUsed < 100f
+                                val statusColor = when {
+                                    isExceeded -> Color(0xFFF87171)
+                                    isApproaching -> Color(0xFFFBBF24)
+                                    else -> Color(0xFF10B981)
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(statusColor.copy(alpha = 0.15f))
+                                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = when {
+                                            isExceeded -> "Exceeded"
+                                            isApproaching -> "Warning (80%+)"
+                                            else -> "Healthy"
+                                        },
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = statusColor
+                                    )
+                                }
+                            }
+                        }
+
+                        if (currentStatus != null && currentStatus.monthlyLimit > 0) {
+                            val isExceeded = currentStatus.percentUsed >= 100f
+                            val isApproaching = currentStatus.percentUsed >= 80f && currentStatus.percentUsed < 100f
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column {
+                                    Text("Spent this Month", fontSize = 11.sp, color = MontraTextSecondary)
+                                    Text(
+                                        "${selectedCurrency.symbol}${String.format(java.util.Locale.US, "%.2f", currentStatus.currentSpent)}",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MontraTextPrimary
+                                    )
+                                }
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("Current Limit", fontSize = 11.sp, color = MontraTextSecondary)
+                                    Text(
+                                        "${selectedCurrency.symbol}${String.format(java.util.Locale.US, "%.2f", currentStatus.monthlyLimit)}",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF818CF8)
+                                    )
+                                }
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text("Remaining", fontSize = 11.sp, color = MontraTextSecondary)
+                                    Text(
+                                        "${selectedCurrency.symbol}${String.format(java.util.Locale.US, "%.2f", currentStatus.remaining)}",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (currentStatus.remaining < 0) Color(0xFFF87171) else Color(0xFF10B981)
+                                    )
+                                }
+                            }
+
+                            LinearProgressIndicator(
+                                progress = { (currentStatus.percentUsed / 100f).coerceIn(0f, 1f) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(6.dp)
+                                    .clip(RoundedCornerShape(3.dp)),
+                                color = when {
+                                    isExceeded -> Color(0xFFF87171)
+                                    isApproaching -> Color(0xFFFBBF24)
+                                    else -> Color(0xFF10B981)
+                                },
+                                trackColor = MontraBorder
+                            )
+                        } else {
+                            Text(
+                                text = "No budget configured yet for this target. Setting a monthly limit will activate tracking, progress bars, and smart warnings before you overspend.",
+                                fontSize = 12.sp,
+                                color = MontraTextSecondary,
+                                lineHeight = 17.sp
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MontraSurfaceElevated)
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Savings,
+                        contentDescription = null,
+                        tint = Color(0xFF818CF8),
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = "Budgets automatically track monthly spending and trigger alerts when you approach or exceed limits.",
+                        fontSize = 12.sp,
+                        color = MontraTextSecondary,
+                        lineHeight = 16.sp
+                    )
                 }
             }
+        } else {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp, vertical = 12.dp)
+            ) {
+                errorMessage?.let { error ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFF3B1E22))
+                            .padding(horizontal = 14.dp, vertical = 10.dp)
+                    ) {
+                        Text(text = error, color = Color(0xFFF87171), fontSize = 13.sp)
+                    }
+                    Spacer(modifier = Modifier.height(14.dp))
+                }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            // Smart Receipt Scanning Card (Developer Mode Exclusive)
+            if (isDeveloperMode) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(MontraSurface)
+                        .border(1.dp, Color(0xFF10B981).copy(alpha = 0.6f), RoundedCornerShape(18.dp))
+                        .padding(16.dp)
+                ) {
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF10B981).copy(alpha = 0.2f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.DocumentScanner,
+                                        contentDescription = "OCR",
+                                        tint = Color(0xFF10B981),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                Column {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(
+                                            text = "Smart Receipt Scan",
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MontraTextPrimary
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(Color(0xFF059669))
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = "DEV",
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White
+                                            )
+                                        }
+                                    }
+                                    Text(
+                                        text = "Auto-extract date, amount, & merchant",
+                                        fontSize = 12.sp,
+                                        color = MontraTextSecondary
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        if (isScanningReceipt) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(MontraSurfaceElevated)
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    color = Color(0xFF10B981),
+                                    strokeWidth = 2.dp
+                                )
+                                Text(
+                                    text = "Analyzing paper receipt with OCR...",
+                                    fontSize = 13.sp,
+                                    color = MontraTextPrimary
+                                )
+                            }
+                        } else {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Button(
+                                    onClick = {
+                                        photoPickerLauncher.launch(
+                                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                        )
+                                    },
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFF059669),
+                                        contentColor = Color.White
+                                    ),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(42.dp)
+                                        .testTag("btn_scan_receipt_picker")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.DocumentScanner,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(text = "Scan Receipt", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                }
+
+                                // Quick sample receipt OCR button
+                                OutlinedButton(
+                                    onClick = {
+                                        // Simulate OCR extraction from sample physical receipt
+                                        val sampleMerchants = listOf(
+                                            Triple("Starbucks Coffee", 6.85, ExpenseCategory.FOOD),
+                                            Triple("Whole Foods Market", 54.20, ExpenseCategory.SHOPPING),
+                                            Triple("Shell Gasoline", 38.50, ExpenseCategory.TRANSPORT),
+                                            Triple("CVS Pharmacy", 19.95, ExpenseCategory.HEALTH)
+                                        )
+                                        val picked = sampleMerchants.random()
+                                        amountText = String.format(java.util.Locale.US, "%.2f", picked.second)
+                                        description = picked.first
+                                        selectedCategoryKey = picked.third.name
+                                        dateMillis = System.currentTimeMillis()
+                                        scanNotice = "OCR Extracted: ${picked.first} • ${selectedCurrency.symbol}${String.format(java.util.Locale.US, "%.2f", picked.second)}"
+                                    },
+                                    shape = RoundedCornerShape(12.dp),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, MontraBorder),
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        contentColor = MontraTextSecondary
+                                    ),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(42.dp)
+                                        .testTag("btn_sample_receipt")
+                                ) {
+                                    Text(text = "Sample Receipt", fontSize = 13.sp)
+                                }
+                            }
+                        }
+
+                        scanNotice?.let { notice ->
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(Color(0xFF064E3B).copy(alpha = 0.5f))
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.CheckCircle,
+                                    contentDescription = "Scanned",
+                                    tint = Color(0xFF10B981),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = notice,
+                                    fontSize = 12.sp,
+                                    color = Color(0xFFA7F3D0),
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+            }
 
             // Amount Field
             Text(
@@ -590,6 +1094,134 @@ fun AddExpenseScreen(
                 }
             }
 
+            // Category Budget Live Glance (on Expense tab)
+            if (currentTab == AddExpenseTab.EXPENSE) {
+                val catBudget = budgetStatuses.firstOrNull { it.categoryName == selectedCategoryKey }
+                Spacer(modifier = Modifier.height(10.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(MontraSurface)
+                        .border(1.dp, MontraBorder, RoundedCornerShape(14.dp))
+                        .padding(horizontal = 14.dp, vertical = 10.dp)
+                ) {
+                    if (catBudget != null && catBudget.monthlyLimit > 0) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF6366F1).copy(alpha = 0.15f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.AccountBalanceWallet,
+                                        contentDescription = null,
+                                        tint = Color(0xFF818CF8),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                                Column {
+                                    Text(
+                                        text = "Budget: ${selectedCurrency.symbol}${String.format(java.util.Locale.US, "%.0f", catBudget.currentSpent)} / ${selectedCurrency.symbol}${String.format(java.util.Locale.US, "%.0f", catBudget.monthlyLimit)}",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MontraTextPrimary
+                                    )
+                                    Text(
+                                        text = "${String.format(java.util.Locale.US, "%.0f", catBudget.percentUsed)}% spent • ${selectedCurrency.symbol}${String.format(java.util.Locale.US, "%.0f", catBudget.remaining)} left",
+                                        fontSize = 11.sp,
+                                        color = if (catBudget.percentUsed >= 100f) Color(0xFFF87171) else MontraTextSecondary
+                                    )
+                                }
+                            }
+                            TextButton(
+                                onClick = {
+                                    currentTab = AddExpenseTab.BUDGET
+                                    isOverallBudget = false
+                                    budgetCategoryKey = selectedCategoryKey
+                                    budgetAmountText = String.format(java.util.Locale.US, "%.0f", catBudget.monthlyLimit)
+                                },
+                                modifier = Modifier.testTag("btn_adjust_category_budget")
+                            ) {
+                                Text(
+                                    text = "Adjust",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF818CF8)
+                                )
+                            }
+                        }
+                    } else {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clip(CircleShape)
+                                        .background(MontraSurfaceElevated),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Savings,
+                                        contentDescription = null,
+                                        tint = MontraTextSecondary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                                Column {
+                                    Text(
+                                        text = "No budget set for ${selectedCategoryItem.displayName}",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MontraTextPrimary
+                                    )
+                                    Text(
+                                        text = "Set a monthly spending limit to prevent overspending",
+                                        fontSize = 10.sp,
+                                        color = MontraTextMuted
+                                    )
+                                }
+                            }
+                            TextButton(
+                                onClick = {
+                                    currentTab = AddExpenseTab.BUDGET
+                                    isOverallBudget = false
+                                    budgetCategoryKey = selectedCategoryKey
+                                    budgetAmountText = ""
+                                },
+                                modifier = Modifier.testTag("btn_add_category_budget")
+                            ) {
+                                Text(
+                                    text = "+ Add Budget",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF818CF8)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(20.dp))
 
             // Date Field
@@ -684,47 +1316,95 @@ fun AddExpenseScreen(
                 )
             }
         }
+    }
 
-        // Bottom Button: Add Expense / Add Income
-        val isCurrentlyIncome = isIncome ||
-                selectedCategoryKey.equals(ExpenseCategory.INCOME.name, ignoreCase = true) ||
-                selectedCategoryKey.equals("SALARY", ignoreCase = true)
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp)
-        ) {
-            Button(
-                onClick = {
-                    val amount = amountText.toDoubleOrNull()
-                    if (amount == null || amount <= 0.0) {
-                        errorMessage = "Please enter a valid amount"
-                        return@Button
-                    }
-                    onAddExpense(
-                        amount,
-                        selectedCategoryKey,
-                        dateMillis,
-                        description.trim(),
-                        isCurrentlyIncome
-                    )
-                },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isCurrentlyIncome) MontraIncomeGreen else MontraButtonBg,
-                    contentColor = Color.White
-                ),
-                shape = RoundedCornerShape(16.dp),
+        // Bottom Button: Add Expense / Add Income / Save Budget
+        if (currentTab == AddExpenseTab.BUDGET) {
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(54.dp)
-                    .testTag("btn_submit_add_expense")
+                    .padding(20.dp)
             ) {
-                Text(
-                    text = if (isCurrentlyIncome) "Add Income" else "Add Expense",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
+                val activeKey = if (isOverallBudget) "OVERALL" else budgetCategoryKey
+                val currentStatus = budgetStatuses.firstOrNull { it.categoryName == activeKey }
+                val isUpdate = currentStatus != null && currentStatus.monthlyLimit > 0
+                Button(
+                    onClick = {
+                        val limit = budgetAmountText.toDoubleOrNull()
+                        if (limit == null || limit <= 0.0) {
+                            errorMessage = "Please enter a valid monthly limit amount"
+                            return@Button
+                        }
+                        val targetKey = if (isOverallBudget) "OVERALL" else budgetCategoryKey
+                        val targetDisplayName = if (isOverallBudget) "Overall Monthly Budget" else CategoryRegistry.getCategoryItem(budgetCategoryKey).displayName
+                        onSaveBudget?.invoke(targetKey, limit)
+                        budgetSuccessMessage = "Saved ${selectedCurrency.symbol}${String.format(java.util.Locale.US, "%.2f", limit)} monthly limit for $targetDisplayName!"
+                        errorMessage = null
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF6366F1),
+                        contentColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(54.dp)
+                        .testTag("btn_save_monthly_budget")
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.AccountBalanceWallet,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (isUpdate) "Update Monthly Budget" else "Save Monthly Budget",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        } else {
+            val isCurrentlyIncome = isIncome ||
+                    selectedCategoryKey.equals(ExpenseCategory.INCOME.name, ignoreCase = true) ||
+                    selectedCategoryKey.equals("SALARY", ignoreCase = true)
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp)
+            ) {
+                Button(
+                    onClick = {
+                        val amount = amountText.toDoubleOrNull()
+                        if (amount == null || amount <= 0.0) {
+                            errorMessage = "Please enter a valid amount"
+                            return@Button
+                        }
+                        onAddExpense(
+                            amount,
+                            selectedCategoryKey,
+                            dateMillis,
+                            description.trim(),
+                            isCurrentlyIncome
+                        )
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isCurrentlyIncome) MontraIncomeGreen else MontraButtonBg,
+                        contentColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(54.dp)
+                        .testTag("btn_submit_add_expense")
+                ) {
+                    Text(
+                        text = if (isCurrentlyIncome) "Add Income" else "Add Expense",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
         }
     }
@@ -756,15 +1436,24 @@ fun AddExpenseScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         items(expenseCategories, key = { it.name }) { cat ->
-                            val isSelected = selectedCategoryKey.equals(cat.name, ignoreCase = true)
+                            val currentKey = if (currentTab == AddExpenseTab.BUDGET) budgetCategoryKey else selectedCategoryKey
+                            val isSelected = currentKey.equals(cat.name, ignoreCase = true)
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(if (isSelected) MontraSurfaceElevated else Color.Transparent)
                                     .clickable {
-                                        selectedCategoryKey = cat.name
-                                        isIncome = false
+                                        if (currentTab == AddExpenseTab.BUDGET) {
+                                            budgetCategoryKey = cat.name
+                                            val existing = budgetStatuses.firstOrNull { it.categoryName == cat.name }
+                                            if (existing != null && existing.monthlyLimit > 0) {
+                                                budgetAmountText = String.format(java.util.Locale.US, "%.0f", existing.monthlyLimit)
+                                            }
+                                        } else {
+                                            selectedCategoryKey = cat.name
+                                            isIncome = false
+                                        }
                                         isCategoryPickerOpen = false
                                     }
                                     .padding(horizontal = 12.dp, vertical = 10.dp)

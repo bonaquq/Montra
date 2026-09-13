@@ -32,6 +32,8 @@ import com.example.ui.components.BiometricLockScreen
 import com.example.ui.components.CategoriesScreenContent
 import com.example.ui.components.CreateAccountModal
 import com.example.ui.components.CreateCategoryModal
+import com.example.ui.components.DeveloperConsoleModal
+import com.example.ui.components.DeveloperPasscodeDialog
 import com.example.ui.components.ExpenseBottomNav
 import com.example.ui.components.HomeScreenContent
 import com.example.ui.components.SettingsScreenContent
@@ -55,7 +57,17 @@ fun ExpenseTrackerScreen(
     var isCreateAccountModalOpen by remember { mutableStateOf(false) }
     var isAccountManageModalOpen by remember { mutableStateOf(false) }
     var isCreateCategoryModalOpen by remember { mutableStateOf(false) }
+    var isDeveloperConsoleOpen by remember { mutableStateOf(false) }
+    var isDeveloperPasscodeDialogOpen by remember { mutableStateOf(false) }
     var selectedExpenseForDetail by remember { mutableStateOf<Expense?>(null) }
+
+    val openDeveloperFlow = {
+        if (uiState.isDeveloperUnlocked) {
+            isDeveloperConsoleOpen = true
+        } else {
+            isDeveloperPasscodeDialogOpen = true
+        }
+    }
 
     if (uiState.isBiometricEnabled && !uiState.isAppUnlocked) {
         BiometricLockScreen(
@@ -102,6 +114,10 @@ fun ExpenseTrackerScreen(
                 isAddExpenseScreenOpen = false
                 viewModel.clearScannedReceipt()
             },
+            onSaveBudget = { category, limit ->
+                viewModel.setBudget(category, limit)
+            },
+            budgetStatuses = uiState.budgetStatuses,
             onScanReceipt = { uri ->
                 viewModel.scanReceiptImage(context, uri)
             },
@@ -110,7 +126,8 @@ fun ExpenseTrackerScreen(
             onClearScannedReceipt = {
                 viewModel.clearScannedReceipt()
             },
-            selectedCurrency = uiState.selectedCurrency
+            selectedCurrency = uiState.selectedCurrency,
+            isDeveloperMode = uiState.isDeveloperUnlocked
         )
     } else {
         Scaffold(
@@ -250,6 +267,9 @@ fun ExpenseTrackerScreen(
                                     },
                                     onClearAllTransactions = {
                                         viewModel.deleteAllTransactions()
+                                    },
+                                    onOpenDeveloperOptions = {
+                                        openDeveloperFlow()
                                     }
                                 )
                             }
@@ -314,6 +334,10 @@ fun ExpenseTrackerScreen(
             onLogout = {
                 viewModel.logoutAndShowAuth()
                 isAccountManageModalOpen = false
+            },
+            onOpenDeveloperOptions = {
+                isAccountManageModalOpen = false
+                openDeveloperFlow()
             }
         )
     }
@@ -351,6 +375,53 @@ fun ExpenseTrackerScreen(
             onDismiss = { isCreateCategoryModalOpen = false },
             onCreateCategory = { name, iconKey, colorHex ->
                 viewModel.createCustomCategory(name, iconKey, colorHex)
+            }
+        )
+    }
+
+    // Developer Passcode Authentication Dialog
+    if (isDeveloperPasscodeDialogOpen) {
+        DeveloperPasscodeDialog(
+            onDismiss = { isDeveloperPasscodeDialogOpen = false },
+            onCodeVerified = {
+                viewModel.setDeveloperUnlocked(true)
+                isDeveloperPasscodeDialogOpen = false
+                isDeveloperConsoleOpen = true
+            }
+        )
+    }
+
+    // Developer Console & Diagnostic Modal
+    if (isDeveloperConsoleOpen) {
+        DeveloperConsoleModal(
+            uiState = uiState,
+            onDismiss = { isDeveloperConsoleOpen = false },
+            onLockDeveloperMode = {
+                viewModel.setDeveloperUnlocked(false)
+                isDeveloperConsoleOpen = false
+            },
+            onInjectSampleData = {
+                viewModel.injectDeveloperSampleData()
+            },
+            onInjectSingleTransaction = { title, amount, category, isIncome ->
+                viewModel.injectSingleMockTransaction(title, amount, category, isIncome)
+            },
+            onSimulateReceipt = {
+                viewModel.simulateReceiptScan()
+                isDeveloperConsoleOpen = false
+                isAddExpenseScreenOpen = true
+            },
+            onScanReceiptUri = { uri ->
+                viewModel.scanReceiptImage(context, uri)
+                isDeveloperConsoleOpen = false
+                isAddExpenseScreenOpen = true
+            },
+            onOpenAddExpenseWithScan = {
+                isDeveloperConsoleOpen = false
+                isAddExpenseScreenOpen = true
+            },
+            onClearAllTransactions = {
+                viewModel.deleteAllTransactions()
             }
         )
     }

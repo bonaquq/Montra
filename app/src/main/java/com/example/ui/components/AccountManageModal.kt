@@ -21,8 +21,11 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -61,6 +64,7 @@ fun AccountManageModal(
     onOpenCreateAccount: () -> Unit,
     onSwitchAccount: (String) -> Unit,
     onLogout: () -> Unit,
+    onOpenDeveloperOptions: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Dialog(
@@ -286,6 +290,50 @@ fun AccountManageModal(
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold
                     )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Developer Options Button
+                OutlinedButton(
+                    onClick = onOpenDeveloperOptions,
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = Color(0xFF34D399)
+                    ),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF059669).copy(alpha = 0.5f)),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp)
+                        .testTag("btn_account_developer_options")
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Terminal,
+                        contentDescription = "Developer Options",
+                        tint = Color(0xFF10B981),
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Developer Options",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF34D399)
+                    )
+                    Spacer(modifier = Modifier.weight(1f))
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color(0xFF064E3B))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "DEV CODE",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF34D399)
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(10.dp))
