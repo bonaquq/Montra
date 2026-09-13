@@ -773,60 +773,52 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
         _scannedReceiptResult.value = parsed
     }
 
-    fun parseSampleReceipt(sampleType: String) {
-        val ocrSample = when (sampleType.uppercase()) {
-            "GROCERY" -> """
-                WHOLE FOODS MARKET
-                123 Market St, San Francisco CA
-                Date: 09/12/2025
-                Organic Bananas    ${'$'}2.49
-                Almond Milk        ${'$'}4.29
-                Fresh Salmon       ${'$'}18.50
-                Olive Oil Extra    ${'$'}11.99
-                SUBTOTAL:          ${'$'}37.27
-                TAX:               ${'$'}3.18
-                TOTAL:             ${'$'}40.45
+    fun scanBankStatementText(statementText: String) {
+        val parsed = ReceiptParser.parseBankStatementText(statementText)
+        _scannedReceiptResult.value = parsed
+    }
+
+    fun parseBankStatement(bankType: String) {
+        val statementSample = when (bankType.uppercase()) {
+            "MIB", "FAISA" -> """
+                MALDIVES ISLAMIC BANK
+                FaisaMobile Fund Transfer Receipt
+                Transaction ID: MIBFT8921473
+                Date & Time: 12/09/2025 15:42
+                From Account: 9901-01-123456-100
+                Beneficiary: Agora Supermarket Male'
+                Amount: MVR 425.50
+                Narration: Groceries & House Supplies
+                Status: SUCCESSFUL
             """.trimIndent()
-            "COFFEE" -> """
-                STARBUCKS COFFEE
-                Store #1492
-                Date: 09/12/2025
-                1x Caffe Latte     ${'$'}5.45
-                1x Croissant       ${'$'}3.85
-                TOTAL:             ${'$'}9.30
-            """.trimIndent()
-            "GAS" -> """
-                SHELL GAS STATION
-                Station #0812
-                Date: 09/11/2025
-                Pump #03 Regular   ${'$'}45.00
-                TOTAL:             ${'$'}45.00
-            """.trimIndent()
-            "RETAIL" -> """
-                TARGET STORES
-                Receipt #9283-11
-                Date: 09/10/2025
-                Home Decor Lamp    ${'$'}39.99
-                Storage Bins       ${'$'}19.99
-                TAX:               ${'$'}4.80
-                TOTAL:             ${'$'}64.78
-            """.trimIndent()
-            "PHARMACY" -> """
-                CVS PHARMACY
-                Store #0312
-                Date: 09/09/2025
-                Vitamins C 1000mg  ${'$'}14.49
-                First Aid Kit      ${'$'}8.99
-                TOTAL:             ${'$'}23.48
+            "BML_INCOME", "SALARY" -> """
+                BANK OF MALDIVES PLC
+                Direct Credit Advice / Account Statement
+                Reference: BMLTXN9182390
+                Date: 01/09/2025
+                Account: 7701-123456-001
+                Particulars: Monthly Salary Credited
+                Credit Amount: MVR 22,500.00
+                Available Balance: MVR 24,150.00
             """.trimIndent()
             else -> """
-                GENERAL STORE
-                Date: 09/12/2025
-                Assorted Goods
-                TOTAL: ${'$'}25.00
+                BANK OF MALDIVES PLC
+                Internet Banking Transfer Advice
+                Reference: BMLTXN8491028
+                Date: 12/09/2025
+                Debit Account: 7701-123456-001
+                Paid to: STELCO Electricity Bill Payment
+                Remarks: Electricity bill for Apt 4B
+                Amount: MVR 850.50
+                Status: Completed
             """.trimIndent()
         }
-        scanReceiptOcrText(ocrSample)
+        scanReceiptOcrText(statementSample)
+    }
+
+    @Deprecated("Replaced with Bank of Maldives and Maldives Islamic Bank statement support")
+    fun parseSampleReceipt(sampleType: String) {
+        parseBankStatement(sampleType)
     }
 
     fun setReportSubTab(subTab: ReportSubTab) {
@@ -1570,13 +1562,35 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun simulateBankStatementScan(bankType: String = "BML") {
+        if (bankType.equals("MIB", ignoreCase = true)) {
+            _scannedReceiptResult.value = ParsedReceiptData(
+                merchantOrTitle = "Maldives Islamic Bank: Agora Supermarket",
+                amount = 450.00,
+                categoryHint = "FOOD",
+                dateMillis = System.currentTimeMillis(),
+                rawNotes = "Maldives Islamic Bank • FaisaMobile Transfer Slip • Ref: MIBFT928412",
+                bankName = "Maldives Islamic Bank",
+                referenceNo = "MIBFT928412",
+                isCreditOrIncome = false,
+                currencyCode = "MVR"
+            )
+        } else {
+            _scannedReceiptResult.value = ParsedReceiptData(
+                merchantOrTitle = "Bank of Maldives: STELCO Electricity",
+                amount = 850.50,
+                categoryHint = "UTILITIES",
+                dateMillis = System.currentTimeMillis(),
+                rawNotes = "Bank of Maldives • BML Internet Banking • Ref: BMLTXN849102",
+                bankName = "Bank of Maldives",
+                referenceNo = "BMLTXN849102",
+                isCreditOrIncome = false,
+                currencyCode = "MVR"
+            )
+        }
+    }
+
     fun simulateReceiptScan() {
-        _scannedReceiptResult.value = ParsedReceiptData(
-            merchantOrTitle = "Trader Joe's",
-            amount = 48.75,
-            categoryHint = "FOOD",
-            dateMillis = System.currentTimeMillis(),
-            rawNotes = "Simulated receipt scan by Dev Console"
-        )
+        simulateBankStatementScan("BML")
     }
 }

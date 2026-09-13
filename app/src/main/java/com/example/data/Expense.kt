@@ -72,7 +72,8 @@ enum class ExpenseCategory(
             val lower = text.lowercase()
             return when {
                 lower.contains("salary") || lower.contains("paycheck") || lower.contains("deposit") ||
-                lower.contains("freelance") || lower.contains("income") || lower.contains("bonus") -> INCOME
+                lower.contains("freelance") || lower.contains("income") || lower.contains("bonus") ||
+                lower.contains("payroll") || lower.contains("allowance") -> INCOME
 
                 lower.contains("rent") || lower.contains("lease") || lower.contains("landlord") ||
                 lower.contains("apartment") || lower.contains("housing") -> RENT
@@ -80,23 +81,32 @@ enum class ExpenseCategory(
                 lower.contains("uber") || lower.contains("lyft") || lower.contains("gas") ||
                 lower.contains("fuel") || lower.contains("parking") || lower.contains("transit") ||
                 lower.contains("metro") || lower.contains("train") || lower.contains("subway") ||
-                lower.contains("flight") || lower.contains("bus") || lower.contains("taxi") -> TRANSPORT
+                lower.contains("flight") || lower.contains("bus") || lower.contains("taxi") ||
+                lower.contains("fsm") || lower.contains("petrol") || lower.contains("mtcc") ||
+                lower.contains("ferry") || lower.contains("raajje transport") -> TRANSPORT
 
                 lower.contains("coffee") || lower.contains("starbucks") || lower.contains("cafe") ||
                 lower.contains("restaurant") || lower.contains("dinner") || lower.contains("lunch") ||
                 lower.contains("breakfast") || lower.contains("burger") || lower.contains("pizza") ||
                 lower.contains("groceries") || lower.contains("market") || lower.contains("supermarket") ||
                 lower.contains("trader joe") || lower.contains("whole foods") ||
+                lower.contains("seagull") || lower.contains("dinemore") || lower.contains("shell beans") ||
+                lower.contains("coffee club") || lower.contains("marrybrown") ||
                 lower.contains("food") || lower.contains("drink") || lower.contains("bakery") -> FOOD
 
                 lower.contains("amazon") || lower.contains("walmart") || lower.contains("target") ||
                 lower.contains("shoes") || lower.contains("clothes") || lower.contains("shirt") ||
                 lower.contains("clothing") || lower.contains("apple store") || lower.contains("electronics") ||
+                lower.contains("agora") || lower.contains("redwave") || lower.contains("fantasy") ||
+                lower.contains("ihsan") || lower.contains("sonee") || lower.contains("veligaa") ||
+                lower.contains("asters") || lower.contains("sto supermarket") ||
                 lower.contains("mall") || lower.contains("store") || lower.contains("shop") -> SHOPPING
 
                 lower.contains("electric") || lower.contains("water") || lower.contains("utility") ||
                 lower.contains("internet") || lower.contains("wifi") || lower.contains("phone") ||
-                lower.contains("power") || lower.contains("bill") || lower.contains("verizon") -> UTILITIES
+                lower.contains("power") || lower.contains("bill") || lower.contains("verizon") ||
+                lower.contains("stelco") || lower.contains("mwsc") || lower.contains("dhiraagu") ||
+                lower.contains("ooredoo") || lower.contains("medianet") || lower.contains("wamco") -> UTILITIES
 
                 lower.contains("netflix") || lower.contains("spotify") || lower.contains("disney") ||
                 lower.contains("cinema") || lower.contains("movie") || lower.contains("concert") ||
@@ -104,6 +114,8 @@ enum class ExpenseCategory(
 
                 lower.contains("pharmacy") || lower.contains("gym") || lower.contains("fitness") ||
                 lower.contains("doctor") || lower.contains("dentist") || lower.contains("hospital") ||
+                lower.contains("adk") || lower.contains("tree top") || lower.contains("igmh") ||
+                lower.contains("medica") || lower.contains("sto pharmacy") ||
                 lower.contains("medicine") || lower.contains("clinic") || lower.contains("health") -> HEALTH
 
                 else -> OTHER

@@ -651,7 +651,10 @@ fun SettingsScreenContent(
 
     if (isAboutDialogOpen) {
         val uriHandler = LocalUriHandler.current
-        val instagramUrl = "https://www.instagram.com/hextechzy._/"
+        val instagramAccounts = listOf(
+            Pair("@hextechzy._", "https://www.instagram.com/hextechzy._/"),
+            Pair("@a4ahnaf_prvt", "https://www.instagram.com/a4ahnaf_prvt")
+        )
 
         androidx.compose.ui.window.Dialog(onDismissRequest = { isAboutDialogOpen = false }) {
             Surface(
@@ -741,33 +744,60 @@ fun SettingsScreenContent(
                     Spacer(modifier = Modifier.height(22.dp))
 
                     // Instagram Redirect with Instagram Icon
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(MontraSurfaceElevated)
-                            .border(BorderStroke(1.dp, MontraBorder), RoundedCornerShape(14.dp))
-                            .clickable {
-                                try {
-                                    uriHandler.openUri(instagramUrl)
-                                } catch (_: Exception) {
-                                }
-                            }
-                            .padding(horizontal = 20.dp, vertical = 12.dp)
-                            .testTag("btn_instagram_redirect"),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
+                    Text(
+                        text = "Follow Us on Instagram",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MontraTextSecondary,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        InstagramIcon(
-                            modifier = Modifier.size(22.dp),
-                            tint = MontraTextPrimary
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = "@hextechzy._",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MontraTextPrimary
-                        )
+                        instagramAccounts.forEachIndexed { index, (handle, url) ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(MontraSurfaceElevated)
+                                    .border(BorderStroke(1.dp, MontraBorder), RoundedCornerShape(14.dp))
+                                    .clickable {
+                                        try {
+                                            uriHandler.openUri(url)
+                                        } catch (_: Exception) {
+                                        }
+                                    }
+                                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                                    .testTag(if (index == 0) "btn_instagram_redirect" else "btn_instagram_redirect_${handle.removePrefix("@")}"),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    InstagramIcon(
+                                        modifier = Modifier.size(22.dp),
+                                        tint = MontraTextPrimary
+                                    )
+                                    Text(
+                                        text = handle,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MontraTextPrimary
+                                    )
+                                }
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                                    contentDescription = "Open Instagram $handle",
+                                    tint = MontraTextMuted,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(20.dp))
