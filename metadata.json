@@ -1,0 +1,6 @@
+{
+  "name": "Montra",
+  "description": "Montra - Minimalist personal expense tracking, account management, transaction analytics, and category budgets.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
