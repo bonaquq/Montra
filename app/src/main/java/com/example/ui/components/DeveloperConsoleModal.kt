@@ -1,13 +1,19 @@
 package com.example.ui.components
 
+import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
+import androidx.compose.material.icons.filled.PhotoLibrary
+import java.io.File
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -199,15 +205,6 @@ fun DeveloperPasscodeDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Text(
-                    text = "Please enter the special developer authorization passcode to access internal diagnostic tools, mock generators, and sandbox controls.",
-                    fontSize = 13.sp,
-                    color = MontraTextSecondary,
-                    lineHeight = 18.sp
-                )
-
                 Spacer(modifier = Modifier.height(18.dp))
 
                 // Passcode Input Field
@@ -333,6 +330,8 @@ fun DeveloperConsoleModal(
 ) {
     val context = LocalContext.current
     var isStateViewerExpanded by remember { mutableStateOf(false) }
+    var cameraTempUri by remember { mutableStateOf<Uri?>(null) }
+    var isScanSourceModalOpen by remember { mutableStateOf(false) }
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
@@ -344,6 +343,60 @@ fun DeveloperConsoleModal(
             }
         }
     )
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture(),
+        onResult = { success: Boolean ->
+            if (success) {
+                cameraTempUri?.let { uri ->
+                    if (onScanReceiptUri != null) {
+                        onScanReceiptUri(uri)
+                        Toast.makeText(context, "Scanning camera capture with OCR...", Toast.LENGTH_SHORT).show()
+                        onDismiss()
+                    }
+                }
+            }
+        }
+    )
+
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = { isGranted: Boolean ->
+            if (isGranted) {
+                try {
+                    val tempFile = File(context.cacheDir, "dev_camera_${System.currentTimeMillis()}.jpg")
+                    val uri = FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        tempFile
+                    )
+                    cameraTempUri = uri
+                    cameraLauncher.launch(uri)
+                } catch (e: Exception) {
+                    android.util.Log.e("DeveloperConsole", "Failed to launch camera", e)
+                }
+            }
+        }
+    )
+
+    fun launchCameraCapture() {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            try {
+                val tempFile = File(context.cacheDir, "dev_camera_${System.currentTimeMillis()}.jpg")
+                val uri = FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    tempFile
+                )
+                cameraTempUri = uri
+                cameraLauncher.launch(uri)
+            } catch (e: Exception) {
+                android.util.Log.e("DeveloperConsole", "Failed to launch camera", e)
+            }
+        } else {
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -522,22 +575,20 @@ fun DeveloperConsoleModal(
                         }
                     }
 
-                    // Section 3: Smart Receipt OCR (Developer Exclusive)
-                    DevSectionCard(title = "Smart Receipt Scan (Developer Exclusive)", icon = Icons.Filled.DocumentScanner) {
+                    // Section 3: Smart Statement, Bill & Receipt OCR
+                    DevSectionCard(title = "Smart Statement, Bill & Receipt Scan", icon = Icons.Filled.DocumentScanner) {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Text(
-                                text = "Smart Receipt OCR extraction is restricted to Developer Mode. You can trigger image capture directly here or use the unlocked scanner in Add Expense.",
+                                text = "OCR extraction supports Bank Statements (Bank of Maldives, Maldives Islamic Bank), Utility Bills (STELCO, MWSC, Dhiraagu, Ooredoo, Medianet), and Store Receipts.",
                                 fontSize = 12.sp,
                                 color = MontraTextSecondary,
                                 lineHeight = 17.sp
                             )
 
-                            // Launch photo picker to scan real receipt image
+                            // Launch scanner to scan statement, bill or photo
                             Button(
                                 onClick = {
-                                    photoPickerLauncher.launch(
-                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                    )
+                                    isScanSourceModalOpen = true
                                 },
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = Color(0xFF065F46),
@@ -548,26 +599,7 @@ fun DeveloperConsoleModal(
                             ) {
                                 Icon(Icons.Filled.PhotoCamera, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Scan Physical Receipt Image (Photo Picker)", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                            }
-
-                            // Simulate Receipt Scanner
-                            Button(
-                                onClick = {
-                                    onSimulateReceipt()
-                                    Toast.makeText(context, "Simulated Receipt parsed: Trader Joe's $48.75", Toast.LENGTH_SHORT).show()
-                                    onDismiss()
-                                },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF1E293B),
-                                    contentColor = Color(0xFFFBBF24)
-                                ),
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Icon(Icons.Filled.ReceiptLong, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Simulate Receipt Scan ($48.75 Trader Joe's)", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                Text("Scan Document / Photo (Statement, Bill)", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                             }
 
                             // Open Add Expense with Smart Scan Active
@@ -707,6 +739,149 @@ fun DeveloperConsoleModal(
                             .height(48.dp)
                     ) {
                         Text("Done", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+        }
+    }
+
+    if (isScanSourceModalOpen) {
+        Dialog(onDismissRequest = { isScanSourceModalOpen = false }) {
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = MontraSurface,
+                border = androidx.compose.foundation.BorderStroke(1.dp, MontraBorder),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.DocumentScanner,
+                                contentDescription = null,
+                                tint = Color(0xFF10B981),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Text(
+                                text = "Scan Document / Statement",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MontraTextPrimary
+                            )
+                        }
+                        IconButton(onClick = { isScanSourceModalOpen = false }) {
+                            Icon(Icons.Filled.Close, contentDescription = "Close", tint = MontraTextMuted)
+                        }
+                    }
+
+                    Text(
+                        text = "Choose scan source:",
+                        fontSize = 13.sp,
+                        color = MontraTextSecondary
+                    )
+
+                    // Option 1: Take Photo with Camera
+                    Surface(
+                        onClick = {
+                            isScanSourceModalOpen = false
+                            launchCameraCapture()
+                        },
+                        shape = RoundedCornerShape(14.dp),
+                        color = Color(0xFF064E3B).copy(alpha = 0.5f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF10B981).copy(alpha = 0.4f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF10B981)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.PhotoCamera,
+                                    contentDescription = "Camera",
+                                    tint = Color.Black,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Scan with Camera",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MontraTextPrimary
+                                )
+                                Text(
+                                    text = "Take a photo of paper bill or statement",
+                                    fontSize = 12.sp,
+                                    color = MontraTextMuted
+                                )
+                            }
+                        }
+                    }
+
+                    // Option 2: Choose from Photos
+                    Surface(
+                        onClick = {
+                            isScanSourceModalOpen = false
+                            photoPickerLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        },
+                        shape = RoundedCornerShape(14.dp),
+                        color = MontraSurfaceElevated,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MontraBorder),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(MontraBorder),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.PhotoLibrary,
+                                    contentDescription = "Photos",
+                                    tint = MontraTextPrimary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Choose from Photos",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MontraTextPrimary
+                                )
+                                Text(
+                                    text = "Select screenshot or image from gallery",
+                                    fontSize = 12.sp,
+                                    color = MontraTextMuted
+                                )
+                            }
+                        }
                     }
                 }
             }

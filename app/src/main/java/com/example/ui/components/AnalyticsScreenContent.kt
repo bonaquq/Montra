@@ -59,7 +59,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -685,10 +688,15 @@ fun AnalyticsScreenContent(
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             Text(
-                                text = "Gemini Powered",
+                                text = buildAnnotatedString {
+                                    append("Powered by ")
+                                    withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+                                        append("nomi")
+                                    }
+                                },
                                 fontSize = 11.sp,
                                 color = Color(0xFFA78BFA),
-                                fontWeight = FontWeight.Medium
+                                fontWeight = FontWeight.Normal
                             )
                         }
                     }

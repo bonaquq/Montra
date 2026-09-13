@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -69,6 +70,7 @@ fun AuthScreen(
     onSignIn: (email: String, pass: String) -> Unit,
     onSignUp: (email: String, pass: String, name: String, initialBalance: Double, currency: SupportedCurrency) -> Unit,
     onContinueAsGuest: () -> Unit,
+    onSignInWithGoogle: (() -> Unit)? = null,
     isLoading: Boolean = false,
     errorMessage: String? = null,
     modifier: Modifier = Modifier
@@ -321,6 +323,58 @@ fun AuthScreen(
 
         Spacer(modifier = Modifier.height(28.dp))
 
+        // Google Sign-In Button
+        if (onSignInWithGoogle != null) {
+            Button(
+                onClick = onSignInWithGoogle,
+                enabled = !isLoading,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.White,
+                    contentColor = Color(0xFF1F2937)
+                ),
+                shape = RoundedCornerShape(16.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE5E7EB)),
+                elevation = ButtonDefaults.buttonElevation(defaultElevation = 1.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .testTag("btn_auth_google")
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    GoogleIconBadge(modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "Continue with Google",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF1F2937)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Divider "or continue with email"
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(modifier = Modifier.weight(1f).height(1.dp).background(MontraBorder))
+                Text(
+                    text = "  or continue with email  ",
+                    fontSize = 12.sp,
+                    color = MontraTextMuted,
+                    fontWeight = FontWeight.Medium
+                )
+                Box(modifier = Modifier.weight(1f).height(1.dp).background(MontraBorder))
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
         // Submit Button
         Button(
             onClick = {
@@ -387,6 +441,70 @@ fun AuthScreen(
                 fontWeight = FontWeight.Medium
             )
         }
+    }
+}
+
+@Composable
+fun GoogleIconBadge(modifier: Modifier = Modifier) {
+    androidx.compose.foundation.Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+        val cx = w / 2f
+        val cy = h / 2f
+        val radius = w / 2f
+
+        // Draw clean multi-colored Google 'G' ring arcs
+        val strokeWidth = w * 0.22f
+        val arcSize = androidx.compose.ui.geometry.Size(w - strokeWidth, h - strokeWidth)
+        val arcTopLeft = androidx.compose.ui.geometry.Offset(strokeWidth / 2f, strokeWidth / 2f)
+
+        // Red top-left
+        drawArc(
+            color = Color(0xFFEA4335),
+            startAngle = 180f,
+            sweepAngle = 135f,
+            useCenter = false,
+            topLeft = arcTopLeft,
+            size = arcSize,
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeWidth)
+        )
+        // Blue right
+        drawArc(
+            color = Color(0xFF4285F4),
+            startAngle = 315f,
+            sweepAngle = 90f,
+            useCenter = false,
+            topLeft = arcTopLeft,
+            size = arcSize,
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeWidth)
+        )
+        // Green bottom
+        drawArc(
+            color = Color(0xFF34A853),
+            startAngle = 45f,
+            sweepAngle = 90f,
+            useCenter = false,
+            topLeft = arcTopLeft,
+            size = arcSize,
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeWidth)
+        )
+        // Yellow bottom-left
+        drawArc(
+            color = Color(0xFFFBBC05),
+            startAngle = 135f,
+            sweepAngle = 90f,
+            useCenter = false,
+            topLeft = arcTopLeft,
+            size = arcSize,
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeWidth)
+        )
+        // Center blue bar
+        drawLine(
+            color = Color(0xFF4285F4),
+            start = androidx.compose.ui.geometry.Offset(cx - 1f, cy),
+            end = androidx.compose.ui.geometry.Offset(w - strokeWidth / 3f, cy),
+            strokeWidth = strokeWidth
+        )
     }
 }
 

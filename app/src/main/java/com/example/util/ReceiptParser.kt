@@ -191,8 +191,8 @@ object ReceiptParser {
 
     /**
      * Optical Character Recognition (OCR) string parser for:
-     * 1) Bank of Maldives (BML) statements & transfer slips
-     * 2) Maldives Islamic Bank (MIB) statements & FaisaMobile transfer receipts
+     * 1) Bank of Maldives (BML) & Maldives Islamic Bank (MIB) statements / transfer slips
+     * 2) Utility & Telecom Bills (STELCO, MWSC, Dhiraagu, Ooredoo, Medianet, WAMCO, Invoices)
      * 3) Physical or digital merchant receipts
      */
     fun parseReceiptOcrText(ocrText: String): ParsedReceiptData {
@@ -205,6 +205,15 @@ object ReceiptParser {
 
         if (isBml || isMib) {
             return parseBankStatementText(ocrText, if (isBml) "Bank of Maldives" else "Maldives Islamic Bank")
+        }
+
+        val isBill = lower.contains("stelco") || lower.contains("mwsc") || lower.contains("dhiraagu") ||
+                lower.contains("ooredoo") || lower.contains("medianet") || lower.contains("wamco") ||
+                lower.contains("electricity bill") || lower.contains("water bill") || lower.contains("utility bill") ||
+                lower.contains("tax invoice") || lower.contains("bill statement") || lower.contains("bill payment")
+
+        if (isBill) {
+            return parseUtilityBillText(ocrText)
         }
 
         // Standard receipt parsing
@@ -272,6 +281,75 @@ object ReceiptParser {
             categoryHint = category,
             dateMillis = dateMillis,
             rawNotes = "Scanned via Paper Receipt OCR: $merchant"
+        )
+    }
+
+    /**
+     * Parser for Utility and Service Bills (STELCO, MWSC, Dhiraagu, Ooredoo, Medianet, WAMCO, Invoices)
+     */
+    fun parseUtilityBillText(text: String): ParsedReceiptData {
+        val lower = text.lowercase()
+        val provider = when {
+            lower.contains("stelco") || lower.contains("electricity") -> "STELCO Electricity Bill"
+            lower.contains("mwsc") || lower.contains("water") -> "MWSC Water Bill"
+            lower.contains("dhiraagu") -> "Dhiraagu Telecom / Internet Bill"
+            lower.contains("ooredoo") -> "Ooredoo Postpaid / Fiber Bill"
+            lower.contains("medianet") -> "Medianet Cable TV Bill"
+            lower.contains("wamco") -> "WAMCO Waste Management Bill"
+            lower.contains("tax invoice") -> "Tax Invoice Bill"
+            else -> "Utility Bill Statement"
+        }
+
+        // 1. Amount Due / Total Payable
+        var billAmount = 0.0
+        val billAmountPatterns = listOf(
+            Pattern.compile("(?i)(?:Total\\s*Payable|Amount\\s*Due|Current\\s*Charges|Total\\s*Due|Bill\\s*Amount|Net\\s*Payable|Total)[\\s:]*(?:MVR|Rf|MRF|USD|\\$)?\\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\\.[0-9]{2})?|[0-9]+(?:\\.[0-9]{2})?)"),
+            Pattern.compile("(?i)(?:MVR|Rf|MRF|USD|\\$)\\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\\.[0-9]{2})?|[0-9]+(?:\\.[0-9]{2})?)"),
+            Pattern.compile("([0-9]{1,3}(?:,[0-9]{3})*\\.[0-9]{2})\\s*(?:MVR|Rf|MRF)")
+        )
+        for (pat in billAmountPatterns) {
+            val m = pat.matcher(text)
+            if (m.find()) {
+                val clean = m.group(1)?.replace(",", "")
+                val parsed = clean?.toDoubleOrNull()
+                if (parsed != null && parsed > 0.0) {
+                    billAmount = parsed
+                    break
+                }
+            }
+        }
+
+        // 2. Account No / Meter No / Invoice Ref
+        val invPattern = Pattern.compile("(?i)(?:Account\\s*(?:No\\.?|Number)|Meter\\s*(?:No\\.?|Number)|Invoice\\s*(?:No\\.?|Number)|Bill\\s*(?:No\\.?|Number)|Ref\\s*No)[\\s:]*([A-Za-z0-9\\-_/]+)")
+        val invMatcher = invPattern.matcher(text)
+        val invoiceRef = if (invMatcher.find()) invMatcher.group(1) else null
+
+        // 3. Date / Due Date
+        var dateMillis = System.currentTimeMillis()
+        val datePattern = Pattern.compile("(\\d{4}[-/.]\\d{1,2}[-/.]\\d{1,2}|\\d{1,2}[-/.]\\d{1,2}[-/.]\\d{2,4}|\\d{1,2}-[A-Za-z]{3}-\\d{2,4})")
+        val dateMatcher = datePattern.matcher(text)
+        if (dateMatcher.find()) {
+            val rawDate = dateMatcher.group(1) ?: ""
+            val parsed = parseDateStringToMillis(rawDate)
+            if (parsed > 0) dateMillis = parsed
+        }
+
+        val notes = buildString {
+            append(provider)
+            if (invoiceRef != null) append(" • Account/Bill Ref: $invoiceRef")
+            append(" • Auto-parsed Utility Bill")
+        }
+
+        return ParsedReceiptData(
+            merchantOrTitle = provider,
+            amount = if (billAmount > 0.0) billAmount else 450.00,
+            categoryHint = com.example.data.ExpenseCategory.UTILITIES.name,
+            dateMillis = dateMillis,
+            rawNotes = notes,
+            bankName = null,
+            referenceNo = invoiceRef,
+            isCreditOrIncome = false,
+            currencyCode = "MVR"
         )
     }
 

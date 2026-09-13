@@ -93,6 +93,9 @@ fun ExpenseTrackerScreen(
             onContinueAsGuest = {
                 viewModel.dismissAuth()
             },
+            onSignInWithGoogle = {
+                viewModel.signInWithGoogle(context)
+            },
             isLoading = uiState.isAuthLoading,
             errorMessage = uiState.authErrorMessage
         )

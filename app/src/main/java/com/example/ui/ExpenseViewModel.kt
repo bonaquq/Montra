@@ -232,6 +232,7 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
     val scannedReceiptResult: StateFlow<ParsedReceiptData?> = _scannedReceiptResult
 
     private val authService = com.example.auth.AuthService(application)
+    private val firestoreService = com.example.data.FirestoreService(application)
     private val _authUser = MutableStateFlow<com.example.auth.AuthUser?>(authService.currentUser)
     val authUser: StateFlow<com.example.auth.AuthUser?> = _authUser
 
@@ -285,6 +286,9 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
                 _authUser.value = user
                 if (user != null) {
                     _isAuthDismissed.value = true
+                    syncDataWithFirestore(user.uid)
+                } else {
+                    firestoreService.stopListeners()
                 }
             }
         }
@@ -916,19 +920,21 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
         isIncome: Boolean = false
     ) {
         viewModelScope.launch {
-            repository.insert(
-                Expense(
-                    title = title.trim(),
-                    amount = amount,
-                    category = category,
-                    dateMillis = dateMillis,
-                    note = note.trim(),
-                    currencyCode = currencyCode,
-                    receiptUri = receiptUri,
-                    isAutomated = isAutomated,
-                    transactionType = if (isIncome) "INCOME" else "EXPENSE"
-                )
+            val expense = Expense(
+                title = title.trim(),
+                amount = amount,
+                category = category,
+                dateMillis = dateMillis,
+                note = note.trim(),
+                currencyCode = currencyCode,
+                receiptUri = receiptUri,
+                isAutomated = isAutomated,
+                transactionType = if (isIncome) "INCOME" else "EXPENSE"
             )
+            val id = repository.insert(expense)
+            _authUser.value?.let { user ->
+                firestoreService.saveExpense(user.uid, expense.copy(id = id))
+            }
         }
     }
 
@@ -945,32 +951,41 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
         isIncome: Boolean = false
     ) {
         viewModelScope.launch {
-            repository.update(
-                Expense(
-                    id = id,
-                    title = title.trim(),
-                    amount = amount,
-                    category = category,
-                    dateMillis = dateMillis,
-                    note = note.trim(),
-                    currencyCode = currencyCode,
-                    receiptUri = receiptUri,
-                    isAutomated = isAutomated,
-                    transactionType = if (isIncome) "INCOME" else "EXPENSE"
-                )
+            val expense = Expense(
+                id = id,
+                title = title.trim(),
+                amount = amount,
+                category = category,
+                dateMillis = dateMillis,
+                note = note.trim(),
+                currencyCode = currencyCode,
+                receiptUri = receiptUri,
+                isAutomated = isAutomated,
+                transactionType = if (isIncome) "INCOME" else "EXPENSE"
             )
+            repository.update(expense)
+            _authUser.value?.let { user ->
+                firestoreService.saveExpense(user.uid, expense)
+            }
         }
     }
 
     fun deleteExpense(expense: Expense) {
         viewModelScope.launch {
             repository.delete(expense)
+            _authUser.value?.let { user ->
+                firestoreService.deleteExpense(user.uid, expense.id)
+            }
         }
     }
 
     fun setBudget(category: String, limit: Double, currencyCode: String = _selectedCurrency.value.code) {
         viewModelScope.launch {
-            repository.setBudget(Budget(category = category, monthlyLimit = limit, currencyCode = currencyCode))
+            val budget = Budget(category = category, monthlyLimit = limit, currencyCode = currencyCode)
+            repository.setBudget(budget)
+            _authUser.value?.let { user ->
+                firestoreService.saveBudget(user.uid, budget)
+            }
         }
     }
 
@@ -1340,11 +1355,88 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
             _isAuthLoading.value = false
             _isAuthDismissed.value = true
             prefs.edit().putBoolean("pref_auth_dismissed", true).apply()
+            syncDataWithFirestore(uid)
+        }
+    }
+
+    fun signInWithGoogle(context: Context) {
+        viewModelScope.launch {
+            _isAuthLoading.value = true
+            _authErrorMessage.value = null
+
+            val res = authService.signInWithGoogle(context)
+            if (res is com.example.auth.AuthResult.Success) {
+                val user = res.user
+                _authUser.value = user
+                _isAuthLoading.value = false
+                _isAuthDismissed.value = true
+                prefs.edit().putBoolean("pref_auth_dismissed", true).apply()
+
+                val cleanEmail = user.email ?: "google.user@example.com"
+                val existing = repository.findByEmail(cleanEmail)
+                if (existing != null) {
+                    repository.switchAccount(existing.id)
+                    _selectedCurrency.value = SupportedCurrency.fromCode(existing.currencyCode)
+                } else {
+                    val newAcc = UserAccount(
+                        id = user.uid,
+                        name = user.displayName ?: cleanEmail.substringBefore("@"),
+                        email = cleanEmail,
+                        pin = "1234",
+                        initialBalance = 1000.0,
+                        currencyCode = "USD",
+                        isActive = true
+                    )
+                    repository.createAccount(newAcc)
+                }
+                syncDataWithFirestore(user.uid)
+            } else if (res is com.example.auth.AuthResult.Error) {
+                _isAuthLoading.value = false
+                _authErrorMessage.value = res.message
+            }
+        }
+    }
+
+    fun syncDataWithFirestore(userId: String) {
+        viewModelScope.launch {
+            try {
+                val acc = repository.getActiveAccountOnce()
+                val customCats = repository.getAllCustomCategoriesOnce()
+                val budgetsList = repository.allBudgets.stateIn(viewModelScope).value
+                val expensesList = repository.allExpenses.stateIn(viewModelScope).value
+                
+                firestoreService.syncAllLocalDataToFirestore(
+                    userId = userId,
+                    account = acc,
+                    expenses = expensesList,
+                    budgets = budgetsList,
+                    customCategories = customCats
+                )
+
+                // Listen to real-time changes from Firestore
+                firestoreService.listenToExpenses(userId) { remoteExpenses ->
+                    viewModelScope.launch {
+                        remoteExpenses.forEach { remote ->
+                            repository.insert(remote)
+                        }
+                    }
+                }
+                firestoreService.listenToBudgets(userId) { remoteBudgets ->
+                    viewModelScope.launch {
+                        remoteBudgets.forEach { remote ->
+                            repository.setBudget(remote)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 
     fun logoutAndShowAuth() {
         viewModelScope.launch {
+            firestoreService.stopListeners()
             authService.signOut()
             repository.logout()
             _authUser.value = null
@@ -1445,20 +1537,25 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
         val clean = name.trim()
         if (clean.isBlank()) return
         viewModelScope.launch {
-            repository.insertCustomCategory(
-                CustomCategory(
-                    name = clean,
-                    iconKey = iconKey,
-                    colorHex = colorHex,
-                    isIncome = isIncome
-                )
+            val custom = CustomCategory(
+                name = clean,
+                iconKey = iconKey,
+                colorHex = colorHex,
+                isIncome = isIncome
             )
+            repository.insertCustomCategory(custom)
+            _authUser.value?.let { user ->
+                firestoreService.saveCustomCategory(user.uid, custom)
+            }
         }
     }
 
     fun deleteCustomCategory(category: CustomCategory) {
         viewModelScope.launch {
             repository.deleteCustomCategory(category)
+            _authUser.value?.let { user ->
+                firestoreService.deleteCustomCategory(user.uid, category.name)
+            }
         }
     }
 

@@ -95,7 +95,7 @@ val MontraTextMuted: Color
     get() = LocalMontraColors.current.textMuted
 
 // Badges & Status
-val MontraIncomeGreen = Color(0xFF16A34A)
+val MontraIncomeGreen = Color(0xFF059669)
 val MontraExpenseRed = Color(0xFFEF4444)
 
 // Categories
