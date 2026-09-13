@@ -5,86 +5,14 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- White Receipt Body with Serrated Top and Curled Bottom Right -->
+    <!-- Stylized Minimalist Wallet Outer Shell -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M 33,28.2 L 37.2,25.0 L 41.4,28.2 L 45.6,25.0 L 49.8,28.2 L 54.0,25.0 L 58.2,28.2 L 62.4,25.0 L 66.6,28.2 L 70.8,25.0 L 75.0,28.2 L 75.0,72.0 C 71.0,76.5 64.0,81.0 57.0,83.0 L 37.0,83.0 C 34.8,83.0 33.0,81.2 33.0,79.0 Z" />
+        android:pathData="M 40.6,30.0 L 70.6,30.0 A 3.5,3.5 0 0,1 74.1,33.5 L 74.1,36.1 A 3.5,3.5 0 0,1 70.6,39.6 L 51.6,39.6 A 5.4,5.4 0 0,0 46.2,45.0 L 46.2,63.0 A 5.4,5.4 0 0,0 51.6,68.4 L 70.6,68.4 A 3.5,3.5 0 0,1 74.1,71.9 L 74.1,74.5 A 3.5,3.5 0 0,1 70.6,78.0 L 40.6,78.0 A 11.0,11.0 0 0,1 29.6,67.0 L 29.6,41.0 A 11.0,11.0 0 0,1 40.6,30.0 Z" />
 
-    <!-- Bottom Right Paper Fold Shadow / Crevice -->
-    <path
-        android:pathData="M 57.0,83.0 C 64.0,81.0 71.0,76.5 75.0,72.0"
-        android:strokeColor="#08080A"
-        android:strokeWidth="1.6"
-        android:strokeLineCap="round" />
-
-    <!-- Bottom Right Curled Paper Flap -->
+    <!-- Wallet Card / Clasp Inside Slot -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M 57.0,83.0 C 64.0,81.0 71.0,76.5 75.0,72.0 C 74.0,77.5 71.5,81.2 67.0,82.5 C 64.0,83.2 60.0,83.2 57.0,83.0 Z" />
-    <path
-        android:pathData="M 57.0,83.0 C 60.0,83.2 64.0,83.2 67.0,82.5 C 71.5,81.2 74.0,77.5 75.0,72.0"
-        android:strokeColor="#08080A"
-        android:strokeWidth="0.8"
-        android:strokeLineCap="round" />
-
-    <!-- Currency Monogram: Vertical Center Bar -->
-    <path
-        android:pathData="M 54,32.5 L 54,48.0"
-        android:strokeColor="#08080A"
-        android:strokeWidth="2.8"
-        android:strokeLineCap="round" />
-
-    <!-- Currency Monogram: Middle Bar and Lower Arc -->
-    <path
-        android:pathData="M 60,39.5 L 48,39.5 C 47,42.5 47.5,45.5 51,46.5 C 55,47.2 58.5,46.5 60,44.5"
-        android:strokeColor="#08080A"
-        android:strokeWidth="2.8"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
-
-    <!-- Currency Monogram: Upper Arc -->
-    <path
-        android:pathData="M 60,39.5 C 60,35.5 57,33.5 54,33.5 C 50.5,33.5 48,36.5 48,39.5"
-        android:strokeColor="#08080A"
-        android:strokeWidth="2.8"
-        android:strokeLineCap="round" />
-
-    <!-- Row 1 Items (y = 54) -->
-    <!-- Bullet -->
-    <path
-        android:fillColor="#08080A"
-        android:pathData="M 39.5,52 A 2,2 0 1,0 39.5,56 A 2,2 0 1,0 39.5,52" />
-    <!-- Description Bar -->
-    <path
-        android:fillColor="#08080A"
-        android:pathData="M 45,52.5 L 56,52.5 C 57.1,52.5 58,53.2 58,54 C 58,54.8 57.1,55.5 56,55.5 L 45,55.5 C 43.9,55.5 43,54.8 43,54 C 43,53.2 43.9,52.5 45,52.5 Z" />
-    <!-- Amount Bar -->
-    <path
-        android:fillColor="#08080A"
-        android:pathData="M 67.5,52.5 L 70.5,52.5 C 71.3,52.5 72,53.2 72,54 C 72,54.8 71.3,55.5 70.5,55.5 L 67.5,55.5 C 66.7,55.5 66,54.8 66,54 C 66,53.2 66.7,52.5 67.5,52.5 Z" />
-
-    <!-- Row 2 Items (y = 61) -->
-    <!-- Bullet -->
-    <path
-        android:fillColor="#08080A"
-        android:pathData="M 39.5,59 A 2,2 0 1,0 39.5,63 A 2,2 0 1,0 39.5,59" />
-    <!-- Description Bar -->
-    <path
-        android:fillColor="#08080A"
-        android:pathData="M 45,59.5 L 52,59.5 C 53.1,59.5 54,60.2 54,61 C 54,61.8 53.1,62.5 52,62.5 L 45,62.5 C 43.9,62.5 43,61.8 43,61 C 43,60.2 43.9,59.5 45,59.5 Z" />
-    <!-- Amount Bar -->
-    <path
-        android:fillColor="#08080A"
-        android:pathData="M 65.5,59.5 L 70.5,59.5 C 71.3,59.5 72,60.2 72,61 C 72,61.8 71.3,62.5 70.5,62.5 L 65.5,62.5 C 64.7,62.5 64,61.8 64,61 C 64,60.2 64.7,59.5 65.5,59.5 Z" />
-
-    <!-- Row 3 Items (y = 68) -->
-    <!-- Bullet -->
-    <path
-        android:fillColor="#08080A"
-        android:pathData="M 39.5,66 A 2,2 0 1,0 39.5,70 A 2,2 0 1,0 39.5,66" />
-    <!-- Description Bar -->
-    <path
-        android:fillColor="#08080A"
-        android:pathData="M 45,66.5 L 53.5,66.5 C 54.6,66.5 55.5,67.2 55.5,68 C 55.5,68.8 54.6,69.5 53.5,69.5 L 45,69.5 C 43.9,69.5 43,68.8 43,68 C 43,67.2 43.9,66.5 45,66.5 Z" />
+        android:pathData="M 54.2,44.1 L 74.9,44.1 A 3.5,3.5 0 0,1 78.4,47.6 L 78.4,60.4 A 3.5,3.5 0 0,1 74.9,63.9 L 54.2,63.9 A 3.5,3.5 0 0,1 50.7,60.4 L 50.7,47.6 A 3.5,3.5 0 0,1 54.2,44.1 Z" />
 
 </vector>

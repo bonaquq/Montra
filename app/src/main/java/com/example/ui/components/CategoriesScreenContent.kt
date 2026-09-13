@@ -153,45 +153,24 @@ fun CategoriesScreenContent(
             .statusBarsPadding()
     ) {
         // Header
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .padding(horizontal = 20.dp, vertical = 14.dp)
         ) {
-            Column {
-                Text(
-                    text = "Categories",
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MontraTextPrimary,
-                    modifier = Modifier.testTag("txt_categories_title")
-                )
-                Text(
-                    text = "${allCategoryItems.size} categories • ${uiState.customCategories.size} custom",
-                    fontSize = 13.sp,
-                    color = MontraTextSecondary,
-                    modifier = Modifier.testTag("txt_categories_count")
-                )
-            }
-
-            IconButton(
-                onClick = onAddCategory,
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(CircleShape)
-                    .background(MontraSurface)
-                    .border(1.dp, MontraBorder, CircleShape)
-                    .testTag("btn_add_category")
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Add,
-                    contentDescription = "Create Custom Category",
-                    tint = MontraTextPrimary,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
+            Text(
+                text = "Categories",
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                color = MontraTextPrimary,
+                modifier = Modifier.testTag("txt_categories_title")
+            )
+            Text(
+                text = "${allCategoryItems.size} categories • ${uiState.customCategories.size} custom",
+                fontSize = 13.sp,
+                color = MontraTextSecondary,
+                modifier = Modifier.testTag("txt_categories_count")
+            )
         }
 
         LazyColumn(
