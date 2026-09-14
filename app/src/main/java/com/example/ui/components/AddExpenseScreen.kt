@@ -101,6 +101,7 @@ import com.example.ui.theme.MontraTextPrimary
 import com.example.ui.theme.MontraTextSecondary
 import com.example.util.AmountInputUtils
 import com.example.util.DateUtils
+import com.example.util.FormatUtils
 import com.example.util.ParsedReceiptData
 import com.example.util.ReceiptParser
 
@@ -127,7 +128,7 @@ fun AddExpenseScreen(
     modifier: Modifier = Modifier
 ) {
     var currentTab by remember { mutableStateOf(initialTab) }
-    var incomeCurrency by remember { mutableStateOf(SupportedCurrency.MVR) }
+    var transactionCurrency by remember(selectedCurrency) { mutableStateOf(selectedCurrency) }
     var amountText by remember { mutableStateOf("") }
     var selectedCategoryKey by remember { mutableStateOf(ExpenseCategory.FOOD.name) }
     val selectedCategoryItem = CategoryRegistry.getCategoryItem(selectedCategoryKey)
@@ -227,7 +228,7 @@ fun AddExpenseScreen(
                 isIncome = true
                 currentTab = AddExpenseTab.INCOME
                 if (data.currencyCode.isNotBlank()) {
-                    incomeCurrency = SupportedCurrency.fromCode(data.currencyCode)
+                    transactionCurrency = SupportedCurrency.fromCode(data.currencyCode)
                 }
                 selectedCategoryKey = if (data.categoryHint.equals("TRANSFER", ignoreCase = true)) {
                     "TRANSFER"
@@ -237,6 +238,9 @@ fun AddExpenseScreen(
             } else {
                 isIncome = false
                 currentTab = AddExpenseTab.EXPENSE
+                if (data.currencyCode.isNotBlank()) {
+                    transactionCurrency = SupportedCurrency.fromCode(data.currencyCode)
+                }
                 val resolvedItem = CategoryRegistry.getCategoryItem(data.categoryHint)
                 selectedCategoryKey = resolvedItem.name
             }
@@ -1326,81 +1330,82 @@ fun AddExpenseScreen(
             val isCurrentlyIncomeSection = currentTab == AddExpenseTab.INCOME || isIncome ||
                     selectedCategoryKey.equals(ExpenseCategory.INCOME.name, ignoreCase = true) ||
                     selectedCategoryKey.equals("SALARY", ignoreCase = true)
-            val currentActiveCurrency = if (isCurrentlyIncomeSection) incomeCurrency else selectedCurrency
 
-            // Income Currency Selector (Multi-currency switcher: USD, EUR, MVR, GBP, JPY, INR, CAD, AUD)
-            if (isCurrentlyIncomeSection) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Income Currency",
-                        fontSize = 13.sp,
-                        color = MontraTextSecondary,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Text(
-                        text = "${incomeCurrency.displayName} (${incomeCurrency.symbol})",
-                        fontSize = 12.sp,
-                        color = Color(0xFF34D399),
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(MontraSurface)
-                        .border(1.dp, MontraBorder, RoundedCornerShape(14.dp))
-                        .horizontalScroll(rememberScrollState())
-                        .padding(6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    val allIncomeCurrencies = listOf(
-                        Triple(SupportedCurrency.MVR, "MVR (Rf)", "🇲🇻"),
-                        Triple(SupportedCurrency.USD, "USD ($)", "🇺🇸"),
-                        Triple(SupportedCurrency.EUR, "EUR (€)", "🇪🇺"),
-                        Triple(SupportedCurrency.GBP, "GBP (£)", "🇬🇧"),
-                        Triple(SupportedCurrency.JPY, "JPY (¥)", "🇯🇵"),
-                        Triple(SupportedCurrency.INR, "INR (₹)", "🇮🇳"),
-                        Triple(SupportedCurrency.CAD, "CAD (CA$)", "🇨🇦"),
-                        Triple(SupportedCurrency.AUD, "AUD (A$)", "🇦🇺")
-                    )
-                    allIncomeCurrencies.forEach { (curr, label, flag) ->
-                        val isSelected = incomeCurrency == curr
-                        Surface(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(10.dp))
-                                .clickable { incomeCurrency = curr }
-                                .testTag("btn_income_currency_${curr.code.lowercase()}"),
-                            shape = RoundedCornerShape(10.dp),
-                            color = if (isSelected) Color(0xFF059669) else Color(0xFF1E293B),
-                            border = androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                if (isSelected) Color(0xFF34D399) else MontraBorder
-                            )
+            // Currency Selector (Multi-currency switcher: MVR, USD, EUR, GBP, JPY, INR, CAD, AUD)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = if (isCurrentlyIncomeSection) "Income Currency" else "Expense Currency",
+                    fontSize = 13.sp,
+                    color = MontraTextSecondary,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    text = "${transactionCurrency.displayName} (${transactionCurrency.symbol})",
+                    fontSize = 12.sp,
+                    color = if (isCurrentlyIncomeSection) Color(0xFF34D399) else Color(0xFF818CF8),
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MontraSurface)
+                    .border(1.dp, MontraBorder, RoundedCornerShape(14.dp))
+                    .horizontalScroll(rememberScrollState())
+                    .padding(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                val allCurrencies = listOf(
+                    Triple(SupportedCurrency.MVR, "MVR (Rf)", "🇲🇻"),
+                    Triple(SupportedCurrency.USD, "USD ($)", "🇺🇸"),
+                    Triple(SupportedCurrency.EUR, "EUR (€)", "🇪🇺"),
+                    Triple(SupportedCurrency.GBP, "GBP (£)", "🇬🇧"),
+                    Triple(SupportedCurrency.JPY, "JPY (¥)", "🇯🇵"),
+                    Triple(SupportedCurrency.INR, "INR (₹)", "🇮🇳"),
+                    Triple(SupportedCurrency.CAD, "CAD (CA$)", "🇨🇦"),
+                    Triple(SupportedCurrency.AUD, "AUD (A$)", "🇦🇺")
+                )
+                allCurrencies.forEach { (curr, label, flag) ->
+                    val isSelected = transactionCurrency == curr
+                    Surface(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable { transactionCurrency = curr }
+                            .testTag("btn_currency_${curr.code.lowercase()}"),
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (isSelected) {
+                            if (isCurrentlyIncomeSection) Color(0xFF059669) else Color(0xFF4F46E5)
+                        } else Color(0xFF1E293B),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (isSelected) {
+                                if (isCurrentlyIncomeSection) Color(0xFF34D399) else Color(0xFF818CF8)
+                            } else MontraBorder
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Text(text = flag, fontSize = 14.sp)
-                                Text(
-                                    text = label,
-                                    fontSize = 12.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (isSelected) Color.White else MontraTextSecondary
-                                )
-                            }
+                            Text(text = flag, fontSize = 14.sp)
+                            Text(
+                                text = label,
+                                fontSize = 12.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isSelected) Color.White else MontraTextSecondary
+                            )
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(16.dp))
             }
+            Spacer(modifier = Modifier.height(16.dp))
 
             // Amount Field
             Text(
@@ -1420,7 +1425,7 @@ fun AddExpenseScreen(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "${currentActiveCurrency.symbol} ",
+                        text = "${transactionCurrency.symbol} ",
                         fontSize = 20.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MontraTextSecondary
@@ -1453,6 +1458,54 @@ fun AddExpenseScreen(
                             }
                             innerTextField()
                         }
+                    )
+                }
+            }
+
+            // Live foreign currency conversion & spending notice
+            if (transactionCurrency != selectedCurrency) {
+                val parsedAmt = amountText.toDoubleOrNull() ?: 0.0
+                val convertedVal = SupportedCurrency.convert(if (parsedAmt > 0) parsedAmt else 1.0, transactionCurrency, selectedCurrency)
+                val rate = SupportedCurrency.convert(1.0, transactionCurrency, selectedCurrency)
+                Spacer(modifier = Modifier.height(8.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFF312E81).copy(alpha = 0.35f))
+                        .border(1.dp, Color(0xFF6366F1).copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.AccountBalanceWallet,
+                            contentDescription = null,
+                            tint = Color(0xFFA5B4FC),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = if (parsedAmt > 0) {
+                                "≈ ${FormatUtils.formatCurrency(convertedVal, selectedCurrency)} (${selectedCurrency.code})"
+                            } else {
+                                "Exchange Rate: 1 ${transactionCurrency.code} = ${String.format(java.util.Locale.US, "%.2f", rate)} ${selectedCurrency.code}"
+                            },
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFFE0E7FF)
+                        )
+                    }
+                    Text(
+                        text = if (isCurrentlyIncomeSection) {
+                            "Added to separate ${transactionCurrency.code} balance • Does not inflate ${selectedCurrency.code}"
+                        } else {
+                            "Deducted from separate ${transactionCurrency.code} balance • Does not deduct from ${selectedCurrency.code}"
+                        },
+                        fontSize = 11.sp,
+                        color = Color(0xFFC7D2FE)
                     )
                 }
             }
@@ -1837,7 +1890,7 @@ fun AddExpenseScreen(
                             dateMillis,
                             description.trim(),
                             isCurrentlyIncome,
-                            if (isCurrentlyIncome) incomeCurrency.code else selectedCurrency.code
+                            transactionCurrency.code
                         )
                     },
                     colors = ButtonDefaults.buttonColors(

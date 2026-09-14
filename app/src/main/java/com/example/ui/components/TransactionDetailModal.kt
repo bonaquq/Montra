@@ -117,6 +117,7 @@ fun TransactionDetailModal(
         mutableStateOf(String.format(Locale.US, "%.2f", expense.amount))
     }
     var editCategoryKey by remember(expense) { mutableStateOf(expense.category) }
+    var editCurrency by remember(expense) { mutableStateOf(expense.currency) }
     var editDateMillis by remember(expense) { mutableLongStateOf(expense.dateMillis) }
     var editNote by remember(expense) { mutableStateOf(expense.note) }
     var editIsIncome by remember(expense) { mutableStateOf(expense.isIncome) }
@@ -205,13 +206,25 @@ fun TransactionDetailModal(
 
                     // Amount Display
                     val sign = if (expense.isIncome) "+" else "-"
-                    val displayAmount = FormatUtils.formatCurrency(expense.amount, currency)
+                    val displayAmount = FormatUtils.formatCurrency(expense.amount, expense.currency)
                     Text(
                         text = "$sign$displayAmount",
                         fontSize = 28.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = if (expense.isIncome) MontraIncomeGreen else MontraTextPrimary
                     )
+
+                    if (expense.currency != currency) {
+                        val convertedAmount = SupportedCurrency.convert(expense.amount, expense.currency, currency)
+                        val formattedConverted = FormatUtils.formatCurrency(convertedAmount, currency)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "≈ $sign$formattedConverted (${currency.code})",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MontraTextSecondary
+                        )
+                    }
 
                     Spacer(modifier = Modifier.height(24.dp))
 
@@ -247,8 +260,16 @@ fun TransactionDetailModal(
                         // Currency Row
                         DetailInfoRow(
                             label = "Currency",
-                            value = "${expense.currency.code} (${expense.currency.symbol})"
+                            value = "${expense.currency.displayName} (${expense.currency.code} ${expense.currency.symbol})"
                         )
+
+                        if (expense.currency != currency) {
+                            val rate = SupportedCurrency.convert(1.0, expense.currency, currency)
+                            DetailInfoRow(
+                                label = "Exchange Rate",
+                                value = "1 ${expense.currency.code} = ${String.format(Locale.US, "%.2f", rate)} ${currency.code}"
+                            )
+                        }
 
                         // Note Row
                         if (expense.note.isNotBlank()) {
@@ -418,9 +439,57 @@ fun TransactionDetailModal(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
+                    // Currency Selector in Edit Mode
+                    Text(
+                        text = "Currency",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MontraTextSecondary
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    androidx.compose.foundation.lazy.LazyRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        val allCurrs = listOf(
+                            SupportedCurrency.MVR,
+                            SupportedCurrency.USD,
+                            SupportedCurrency.EUR,
+                            SupportedCurrency.GBP,
+                            SupportedCurrency.JPY,
+                            SupportedCurrency.INR,
+                            SupportedCurrency.CAD,
+                            SupportedCurrency.AUD
+                        )
+                        items(allCurrs) { curr ->
+                            val isSelected = editCurrency == curr
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (isSelected) Color(0xFF4F46E5) else MontraSurfaceElevated)
+                                    .border(
+                                        1.dp,
+                                        if (isSelected) Color(0xFF818CF8) else MontraBorder,
+                                        RoundedCornerShape(8.dp)
+                                    )
+                                    .clickable { editCurrency = curr }
+                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    text = "${curr.code} (${curr.symbol})",
+                                    fontSize = 12.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isSelected) Color.White else MontraTextSecondary
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
                     // Amount Field
                     Text(
-                        text = "Amount (${currency.symbol})",
+                        text = "Amount (${editCurrency.symbol})",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
                         color = MontraTextSecondary
@@ -667,7 +736,7 @@ fun TransactionDetailModal(
                                     editCategoryKey,
                                     editDateMillis,
                                     editNote.trim(),
-                                    expense.currencyCode,
+                                    editCurrency.code,
                                     expense.receiptUri,
                                     editIsIncome
                                 )

@@ -787,43 +787,77 @@ fun MontraTransactionRow(
                 )
             }
 
-            Column {
+            Column(modifier = Modifier.weight(1f, fill = false)) {
                 Text(
                     text = expense.title.ifEmpty { expense.expenseCategory.displayName },
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = MontraTextPrimary
+                    color = MontraTextPrimary,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
                 Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = DateUtils.formatDisplayDate(expense.dateMillis),
-                    fontSize = 12.sp,
-                    color = MontraTextSecondary
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = DateUtils.formatDisplayDate(expense.dateMillis),
+                        fontSize = 12.sp,
+                        color = MontraTextSecondary
+                    )
+                    if (expense.currency != currency) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(Color(0xFF3B82F6).copy(alpha = 0.2f))
+                                .padding(horizontal = 5.dp, vertical = 1.dp)
+                        ) {
+                            Text(
+                                text = expense.currency.code,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF60A5FA)
+                            )
+                        }
+                    }
+                }
             }
         }
 
         // Amount on right
         val isIncome = expense.isIncome
         val sign = if (isIncome) "+" else "-"
-        val formattedAmount = FormatUtils.formatCurrency(expense.amount, currency)
+        val formattedAmount = FormatUtils.formatCurrency(expense.amount, expense.currency)
 
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        Column(
+            horizontalAlignment = Alignment.End
         ) {
-            Text(
-                text = "$sign$formattedAmount",
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = if (isIncome) MontraIncomeGreen else MontraTextPrimary
-            )
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
-                contentDescription = "Transaction options",
-                tint = MontraTextMuted,
-                modifier = Modifier.size(12.dp)
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = "$sign$formattedAmount",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (isIncome) MontraIncomeGreen else MontraTextPrimary
+                )
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                    contentDescription = "Transaction options",
+                    tint = MontraTextMuted,
+                    modifier = Modifier.size(12.dp)
+                )
+            }
+            if (expense.currency != currency) {
+                val convertedVal = SupportedCurrency.convert(expense.amount, expense.currency, currency)
+                Text(
+                    text = "≈ $sign${FormatUtils.formatCurrency(convertedVal, currency)}",
+                    fontSize = 11.sp,
+                    color = MontraTextMuted
+                )
+            }
         }
     }
 }
