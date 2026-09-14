@@ -532,7 +532,7 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
                 val e2 = nonIncomeExpenses[j]
                 if (visited.contains(e2.id)) continue
                 val timeDiffHours = abs(e1.dateMillis - e2.dateMillis) / (1000 * 60 * 60)
-                val sameAmount = abs(e1.amount - e2.amount) < 0.01
+                val sameAmount = abs(convertAmount(e1) - convertAmount(e2)) < 0.01
                 val title1 = e1.title.trim().lowercase()
                 val title2 = e2.title.trim().lowercase()
                 val sameMerchant = title1 == title2 || (title1.isNotEmpty() && title2.isNotEmpty() && (title1.contains(title2) || title2.contains(title1)))
@@ -554,63 +554,112 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
             }
         }
 
-        // 2. Spending Anomaly Detection
-        val byCat = nonIncomeExpenses.groupBy { it.expenseCategory }
-        for ((cat, catExpenses) in byCat) {
+        // 2. Spending Anomaly Detection (Category-aware)
+        val byCat = nonIncomeExpenses.groupBy {
+            com.example.data.CategoryRegistry.getCategoryItem(it.category).displayName
+        }
+        for ((catName, catExpenses) in byCat) {
             if (catExpenses.size >= 2) {
                 val avg = catExpenses.map { convertAmount(it) }.average()
                 val maxExp = catExpenses.maxByOrNull { convertAmount(it) }
-                if (maxExp != null && convertAmount(maxExp) > avg * 2.2 && convertAmount(maxExp) > 50.0) {
-                    val ratio = String.format(Locale.US, "%.1fx", convertAmount(maxExp) / avg)
+                if (maxExp != null && avg > 0) {
+                    val maxVal = convertAmount(maxExp)
+                    if (maxVal > avg * 1.6 && (maxVal - avg) > 15.0) {
+                        val ratio = String.format(Locale.US, "%.1fx", maxVal / avg)
+                        aiInsightsList.add(
+                            AiInsightItem(
+                                id = "anomaly_${maxExp.id}",
+                                title = "Unusual Spending Spike in $catName",
+                                description = "'${maxExp.title}' for ${FormatUtils.formatCurrency(maxVal, currency)} is $ratio higher than your category average of ${FormatUtils.formatCurrency(avg, currency)}.",
+                                type = "ANOMALY",
+                                severity = "WARNING",
+                                relatedExpense = maxExp
+                            )
+                        )
+                    }
+                }
+            }
+        }
+
+        // 3. Single Large Outlier Transaction (> 35% of total period spend)
+        if (totalSpentValue > 0) {
+            val largestExp = nonIncomeExpenses.maxByOrNull { convertAmount(it) }
+            if (largestExp != null && nonIncomeExpenses.size >= 3) {
+                val largestAmount = convertAmount(largestExp)
+                val sharePct = (largestAmount / totalSpentValue * 100).toInt()
+                if (sharePct >= 35 && aiInsightsList.none { it.relatedExpense?.id == largestExp.id }) {
                     aiInsightsList.add(
                         AiInsightItem(
-                            id = "anomaly_${maxExp.id}",
-                            title = "Unusual Spending Spike in ${cat.displayName}",
-                            description = "'${maxExp.title}' for ${FormatUtils.formatCurrency(convertAmount(maxExp), currency)} is $ratio higher than your typical average of ${FormatUtils.formatCurrency(avg, currency)}.",
+                            id = "outlier_${largestExp.id}",
+                            title = "Significant Outlay Detected",
+                            description = "'${largestExp.title}' accounts for $sharePct% of your total spending this period (${FormatUtils.formatCurrency(largestAmount, currency)}).",
                             type = "ANOMALY",
                             severity = "WARNING",
-                            relatedExpense = maxExp
+                            relatedExpense = largestExp
                         )
                     )
                 }
             }
         }
 
-        // 3. Savings Opportunities
-        val foodSpent = nonIncomeExpenses.filter { it.expenseCategory == ExpenseCategory.FOOD }.sumOf { convertAmount(it) }
-        if (totalSpentValue > 0 && (foodSpent / totalSpentValue) > 0.25) {
-            val pct = (foodSpent / totalSpentValue * 100).toInt()
-            val potSave = foodSpent * 0.18
-            aiInsightsList.add(
-                AiInsightItem(
-                    id = "tip_food",
-                    title = "Dining Outlay Savings Opportunity",
-                    description = "Food represents $pct% of your total expenses. Preparing 2 more home-cooked meals weekly could save an estimated ${FormatUtils.formatCurrency(potSave, currency)} each month.",
-                    type = "SAVINGS",
-                    severity = "INFO"
-                )
-            )
+        // 4. Category-Specific Savings Insights
+        if (totalSpentValue > 0) {
+            // Find top spending category
+            val topCategoryEntry = byCat.maxByOrNull { (_, list) -> list.sumOf { convertAmount(it) } }
+            if (topCategoryEntry != null) {
+                val catName = topCategoryEntry.key
+                val catTotal = topCategoryEntry.value.sumOf { convertAmount(it) }
+                val catPct = (catTotal / totalSpentValue * 100).toInt()
+                if (catPct >= 25 && aiInsightsList.size < 4) {
+                    val potentialSave = catTotal * 0.15
+                    aiInsightsList.add(
+                        AiInsightItem(
+                            id = "top_cat_insight_${catName.lowercase().replace(" ", "_")}",
+                            title = "$catName represents $catPct% of total spending",
+                            description = "You've spent ${FormatUtils.formatCurrency(catTotal, currency)} on $catName. Trimming 15% here could save ${FormatUtils.formatCurrency(potentialSave, currency)} for your goals.",
+                            type = "SAVINGS",
+                            severity = "INFO"
+                        )
+                    )
+                }
+            }
         }
 
-        val subSpent = nonIncomeExpenses.filter { it.expenseCategory == ExpenseCategory.UTILITIES || it.expenseCategory == ExpenseCategory.ENTERTAINMENT }.sumOf { convertAmount(it) }
-        if (subSpent > 40.0) {
-            aiInsightsList.add(
-                AiInsightItem(
-                    id = "tip_recurring",
-                    title = "Recurring Subscriptions Optimization",
-                    description = "You spent ${FormatUtils.formatCurrency(subSpent, currency)} on entertainment & recurring bills. Auditing inactive memberships could save up to ${FormatUtils.formatCurrency(subSpent * 3, currency)}/year.",
-                    type = "TIP",
-                    severity = "INFO"
+        // 5. Cash Flow & Savings Ratio Analysis
+        if (totalIncomeValue > 0) {
+            val netSavings = totalIncomeValue - totalSpentValue
+            val savingsRate = (netSavings / totalIncomeValue * 100).toInt()
+            if (savingsRate >= 20 && aiInsightsList.size < 4) {
+                aiInsightsList.add(
+                    AiInsightItem(
+                        id = "healthy_savings_rate",
+                        title = "Strong Savings Rate ($savingsRate%)",
+                        description = "You're retaining ${FormatUtils.formatCurrency(netSavings, currency)} of your income this period. Great job staying financially resilient!",
+                        type = "TIP",
+                        severity = "INFO"
+                    )
                 )
-            )
+            } else if (totalSpentValue > totalIncomeValue && aiInsightsList.none { it.id == "deficit_warning" }) {
+                val deficit = totalSpentValue - totalIncomeValue
+                aiInsightsList.add(
+                    AiInsightItem(
+                        id = "deficit_warning",
+                        title = "Outflows Exceed Inflows",
+                        description = "Total spending exceeds total recorded income by ${FormatUtils.formatCurrency(deficit, currency)}. Review non-essential expenses to maintain balance.",
+                        type = "ANOMALY",
+                        severity = "ALERT"
+                    )
+                )
+            }
         }
 
-        if (aiInsightsList.none { it.type == "SAVINGS" || it.type == "TIP" }) {
+        // 6. General Financial Wisdom if list is still small
+        if (aiInsightsList.isEmpty() || aiInsightsList.none { it.type == "SAVINGS" || it.type == "TIP" }) {
             aiInsightsList.add(
                 AiInsightItem(
                     id = "tip_general",
                     title = "Automated Payday Savings Rule",
-                    description = "Auto-routing 10% of monthly income to a separate savings goal on deposit days prevents impulse spending and builds financial peace of mind.",
+                    description = "Auto-routing 10% to 20% of income to a dedicated savings or investment pool on deposit days prevents impulse spending.",
                     type = "TIP",
                     severity = "INFO"
                 )

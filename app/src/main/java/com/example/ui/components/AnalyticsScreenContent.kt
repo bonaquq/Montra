@@ -691,7 +691,7 @@ fun AnalyticsScreenContent(
                                 text = buildAnnotatedString {
                                     append("Powered by ")
                                     withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-                                        append("nomi")
+                                        append("Nomi")
                                     }
                                 },
                                 fontSize = 11.sp,
