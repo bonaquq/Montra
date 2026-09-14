@@ -21,6 +21,10 @@ class ExpenseRepository(
 
     suspend fun insert(expense: Expense): Long = expenseDao.insertExpense(expense)
 
+    suspend fun insertExpenses(expenses: List<Expense>) = expenseDao.insertExpenses(expenses)
+
+    suspend fun getAllExpensesOnce(): List<Expense> = expenseDao.getAllExpensesOnce()
+
     suspend fun update(expense: Expense) = expenseDao.updateExpense(expense)
 
     suspend fun delete(expense: Expense) = expenseDao.deleteExpense(expense)
@@ -28,6 +32,8 @@ class ExpenseRepository(
     suspend fun deleteById(id: Long) = expenseDao.deleteExpenseById(id)
 
     suspend fun setBudget(budget: Budget) = budgetDao.insertBudget(budget)
+
+    suspend fun insertBudgets(budgets: List<Budget>) = budgetDao.insertBudgets(budgets)
 
     suspend fun deleteBudget(budget: Budget) = budgetDao.deleteBudget(budget)
 
@@ -42,6 +48,9 @@ class ExpenseRepository(
 
     suspend fun insertCustomCategory(category: CustomCategory): Long =
         customCategoryDao.insertCategory(category)
+
+    suspend fun insertCustomCategories(categories: List<CustomCategory>) =
+        customCategoryDao.insertCategories(categories)
 
     suspend fun deleteCustomCategory(category: CustomCategory) =
         customCategoryDao.deleteCategory(category)

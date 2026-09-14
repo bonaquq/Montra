@@ -17,7 +17,7 @@ enum class SupportedCurrency(
 
     companion object {
         fun fromCode(code: String?): SupportedCurrency {
-            return entries.firstOrNull { it.code.equals(code, ignoreCase = true) } ?: USD
+            return entries.firstOrNull { it.code.equals(code, ignoreCase = true) } ?: MVR
         }
 
         fun convert(amount: Double, from: SupportedCurrency, to: SupportedCurrency): Double {

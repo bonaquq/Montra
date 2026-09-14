@@ -106,7 +106,6 @@ fun SettingsScreenContent(
     val biometricStatus = remember { BiometricAuthManager.getBiometricStatus(context) }
     var biometricInfoDialogText by remember { mutableStateOf<String?>(null) }
     var notificationsEnabled by remember { mutableStateOf(false) }
-    var isCurrencyPickerOpen by remember { mutableStateOf(false) }
     var isThemePickerOpen by remember { mutableStateOf(false) }
     var isAboutDialogOpen by remember { mutableStateOf(false) }
     var isClearDataDialogOpen by remember { mutableStateOf(false) }
@@ -203,14 +202,6 @@ fun SettingsScreenContent(
 
             // Settings Options List
             item {
-                SettingsItemRow(
-                    icon = Icons.Filled.AttachMoney,
-                    title = "Currency",
-                    value = "${uiState.selectedCurrency.name} (${uiState.selectedCurrency.symbol})",
-                    onClick = { isCurrencyPickerOpen = true }
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-
                 SettingsItemRow(
                     icon = if (uiState.appTheme == AppTheme.LIGHT) Icons.Filled.LightMode else Icons.Filled.DarkMode,
                     title = "Theme",
@@ -449,88 +440,6 @@ fun SettingsScreenContent(
                 }
 
                 Spacer(modifier = Modifier.height(30.dp))
-            }
-        }
-    }
-
-    if (isCurrencyPickerOpen) {
-        androidx.compose.ui.window.Dialog(onDismissRequest = { isCurrencyPickerOpen = false }) {
-            Surface(
-                shape = RoundedCornerShape(24.dp),
-                color = MontraSurface,
-                border = androidx.compose.foundation.BorderStroke(1.dp, MontraBorder),
-                modifier = Modifier
-                    .fillMaxWidth(0.92f)
-                    .padding(vertical = 16.dp)
-            ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Text(
-                        text = "Select Preferred Currency",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MontraTextPrimary
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "Choose your base currency for balances & transactions",
-                        fontSize = 12.sp,
-                        color = MontraTextSecondary
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    LazyColumn(modifier = Modifier.height(280.dp)) {
-                        items(com.example.data.SupportedCurrency.entries) { cur ->
-                            val isSelected = cur == uiState.selectedCurrency
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(if (isSelected) MontraButtonBg else MontraSurfaceElevated)
-                                    .clickable {
-                                        onCurrencySelected(cur)
-                                        isCurrencyPickerOpen = false
-                                    }
-                                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    Text(
-                                        text = cur.code,
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MontraTextPrimary
-                                    )
-                                    Text(
-                                        text = cur.displayName,
-                                        fontSize = 13.sp,
-                                        color = MontraTextSecondary
-                                    )
-                                }
-                                Text(
-                                    text = cur.symbol,
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = if (isSelected) MontraTextPrimary else MontraTextMuted
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Button(
-                        onClick = { isCurrencyPickerOpen = false },
-                        colors = ButtonDefaults.buttonColors(containerColor = MontraSurfaceElevated),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Close", color = MontraTextPrimary)
-                    }
-                }
             }
         }
     }

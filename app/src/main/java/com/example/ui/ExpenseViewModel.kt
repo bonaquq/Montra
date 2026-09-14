@@ -1573,7 +1573,7 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
                         email = cleanEmail,
                         pin = cleanPass,
                         initialBalance = 1000.0,
-                        currencyCode = "USD",
+                        currencyCode = "MVR",
                         isActive = true
                     )
                     repository.createAccount(newAcc)
@@ -1728,7 +1728,7 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
                 email = cleanEmail,
                 pin = "1234",
                 initialBalance = 1000.0,
-                currencyCode = "USD",
+                currencyCode = "MVR",
                 isActive = true
             )
             repository.createAccount(newAcc)
@@ -1808,7 +1808,7 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
                     email = "guest@montra.app",
                     pin = "1234",
                     initialBalance = 0.0,
-                    currencyCode = "USD",
+                    currencyCode = "MVR",
                     isActive = true
                 )
                 repository.createAccount(guestAcc)

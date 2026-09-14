@@ -17,7 +17,7 @@ object DateUtils {
 }
 
 object FormatUtils {
-    fun formatCurrency(amount: Double, currency: SupportedCurrency = SupportedCurrency.USD): String {
+    fun formatCurrency(amount: Double, currency: SupportedCurrency = SupportedCurrency.MVR): String {
         return when (currency) {
             SupportedCurrency.USD -> String.format(Locale.US, "$%.2f", amount)
             SupportedCurrency.EUR -> String.format(Locale.GERMANY, "€%.2f", amount)
