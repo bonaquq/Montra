@@ -19,13 +19,26 @@ data class MontraColorPalette(
     val isDark: Boolean
 )
 
-val DarkMontraPalette = MontraColorPalette(
+val OledMontraPalette = MontraColorPalette(
     background = Color(0xFF0D0D11),
     surface = Color(0xFF18181B),
     surfaceElevated = Color(0xFF222227),
     border = Color(0xFF27272A),
     buttonBg = Color(0xFF27272E),
     buttonBgActive = Color(0xFF32323D),
+    textPrimary = Color(0xFFFFFFFF),
+    textSecondary = Color(0xFFA1A1AA),
+    textMuted = Color(0xFF71717A),
+    isDark = true
+)
+
+val DarkMontraPalette = MontraColorPalette(
+    background = Color(0xFF1C1C1C),
+    surface = Color(0xFF262626),
+    surfaceElevated = Color(0xFF303030),
+    border = Color(0xFF383838),
+    buttonBg = Color(0xFF303030),
+    buttonBgActive = Color(0xFF3D3D3D),
     textPrimary = Color(0xFFFFFFFF),
     textSecondary = Color(0xFFA1A1AA),
     textMuted = Color(0xFF71717A),

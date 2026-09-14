@@ -52,7 +52,7 @@ class MainActivity : FragmentActivity() {
                 onDispose { }
             }
 
-            MyApplicationTheme(darkTheme = uiState.isDarkMode) {
+            MyApplicationTheme(appTheme = uiState.appTheme, darkTheme = uiState.isDarkMode) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MontraBackground

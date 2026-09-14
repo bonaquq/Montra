@@ -16,6 +16,7 @@ import com.example.data.ExpenseRepository
 import com.example.data.SavingsGoal
 import com.example.data.SupportedCurrency
 import com.example.data.UserAccount
+import com.example.ui.theme.AppTheme
 import com.example.util.FormatUtils
 import com.example.util.ParsedReceiptData
 import com.example.util.ReceiptParser
@@ -184,6 +185,7 @@ data class ExpenseUiState(
     val isAuthLoading: Boolean = false,
     val authErrorMessage: String? = null,
     val isAuthDismissed: Boolean = false,
+    val appTheme: AppTheme = AppTheme.DARK,
     val isDarkMode: Boolean = true,
     val isBiometricEnabled: Boolean = false,
     val isAppUnlocked: Boolean = true,
@@ -196,7 +198,14 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
     private val repository: ExpenseRepository
     private val prefs = application.getSharedPreferences("montra_preferences", Context.MODE_PRIVATE)
 
-    private val _isDarkMode = MutableStateFlow(prefs.getBoolean("pref_dark_mode", true))
+    private val initialTheme: AppTheme = prefs.getString("pref_app_theme", null)?.let {
+        AppTheme.fromString(it)
+    } ?: if (prefs.getBoolean("pref_dark_mode", true)) AppTheme.DARK else AppTheme.LIGHT
+
+    private val _appTheme = MutableStateFlow(initialTheme)
+    val appTheme: StateFlow<AppTheme> = _appTheme
+
+    private val _isDarkMode = MutableStateFlow(initialTheme.isDark)
     val isDarkMode: StateFlow<Boolean> = _isDarkMode
 
     private val _activeTab = MutableStateFlow(AppTab.HOME)
@@ -350,6 +359,7 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
         val warningThreshold: Int,
         val dismissedAlerts: Set<String>,
         val recentAlertMsg: String?,
+        val appTheme: AppTheme,
         val isDarkMode: Boolean,
         val isBiometricEnabled: Boolean,
         val isAppUnlocked: Boolean,
@@ -377,13 +387,14 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
         _budgetWarningThreshold,
         _dismissedAlerts,
         _recentBudgetAlertMessage,
-        _isDarkMode,
+        _appTheme,
         _isBiometricEnabled,
         _isAppUnlocked,
         _biometricErrorMessage,
         _isDeveloperUnlocked,
         _overallBudgetPeriod
     ) { args: Array<Any?> ->
+        val currentTheme = args[17] as AppTheme
         FilterCriteria(
             timeRange = args[0] as TimeRange,
             categoryFilter = args[1] as? ExpenseCategory,
@@ -402,7 +413,8 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
             warningThreshold = args[14] as Int,
             dismissedAlerts = args[15] as Set<String>,
             recentAlertMsg = args[16] as? String,
-            isDarkMode = args[17] as Boolean,
+            appTheme = currentTheme,
+            isDarkMode = currentTheme.isDark,
             isBiometricEnabled = args[18] as Boolean,
             isAppUnlocked = args[19] as Boolean,
             biometricError = args[20] as? String,
@@ -898,6 +910,7 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
             isAuthLoading = auth.isLoading,
             authErrorMessage = auth.errorMessage,
             isAuthDismissed = auth.isDismissed,
+            appTheme = criteria.appTheme,
             isDarkMode = criteria.isDarkMode,
             isBiometricEnabled = criteria.isBiometricEnabled,
             isAppUnlocked = criteria.isAppUnlocked,
@@ -1063,13 +1076,26 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
         prefs.edit().putString("pref_currency", currency.code).apply()
     }
 
+    fun setAppTheme(theme: AppTheme) {
+        _appTheme.value = theme
+        _isDarkMode.value = theme.isDark
+        prefs.edit()
+            .putString("pref_app_theme", theme.name)
+            .putBoolean("pref_dark_mode", theme.isDark)
+            .apply()
+    }
+
     fun setDarkMode(isDark: Boolean) {
-        _isDarkMode.value = isDark
-        prefs.edit().putBoolean("pref_dark_mode", isDark).apply()
+        val theme = if (isDark) AppTheme.DARK else AppTheme.LIGHT
+        setAppTheme(theme)
     }
 
     fun toggleDarkMode() {
-        setDarkMode(!_isDarkMode.value)
+        if (_appTheme.value.isDark) {
+            setAppTheme(AppTheme.LIGHT)
+        } else {
+            setAppTheme(AppTheme.DARK)
+        }
     }
 
     fun setSearchQuery(query: String) {

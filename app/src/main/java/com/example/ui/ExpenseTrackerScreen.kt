@@ -289,6 +289,9 @@ fun ExpenseTrackerScreen(
                                     onSetTheme = { isDark ->
                                         viewModel.setDarkMode(isDark)
                                     },
+                                    onSetAppTheme = { theme ->
+                                        viewModel.setAppTheme(theme)
+                                    },
                                     onToggleTheme = {
                                         viewModel.toggleDarkMode()
                                     },

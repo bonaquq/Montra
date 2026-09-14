@@ -1075,11 +1075,25 @@ fun AddExpenseScreen(
                                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
                                         Text(
-                                            text = "Smart Scanner (Statements, Bills & Receipts)",
+                                            text = "Smart Scanner",
                                             fontSize = 14.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = MontraTextPrimary
                                         )
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(Color(0xFF8B5CF6))
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                                .testTag("badge_smart_scanner_dev")
+                                        ) {
+                                            Text(
+                                                text = "DEV",
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = Color.White
+                                            )
+                                        }
                                         Box(
                                             modifier = Modifier
                                                 .clip(RoundedCornerShape(4.dp))

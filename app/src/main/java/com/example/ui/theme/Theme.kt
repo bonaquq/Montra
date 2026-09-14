@@ -7,7 +7,27 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 
-private val DarkColorScheme = darkColorScheme(
+enum class AppTheme(val displayName: String, val description: String) {
+    OLED("OLED", "Pitch-black dark palette for OLED screens"),
+    DARK("Dark Mode", "Refined #1c1c1c charcoal dark palette"),
+    LIGHT("Light Theme", "Crisp, bright high-contrast light palette");
+
+    val isDark: Boolean
+        get() = this != LIGHT
+
+    companion object {
+        fun fromString(value: String?): AppTheme {
+            return when (value?.uppercase(java.util.Locale.US)) {
+                "OLED" -> OLED
+                "DARK", "DARK_MODE" -> DARK
+                "LIGHT" -> LIGHT
+                else -> DARK
+            }
+        }
+    }
+}
+
+private val OledColorScheme = darkColorScheme(
     primary = Color.White,
     onPrimary = Color.Black,
     primaryContainer = Color(0xFF222227),
@@ -27,6 +47,28 @@ private val DarkColorScheme = darkColorScheme(
     error = MontraExpenseRed,
     onError = Color.White,
     outline = Color(0xFF27272A)
+)
+
+private val DarkColorScheme = darkColorScheme(
+    primary = Color.White,
+    onPrimary = Color.Black,
+    primaryContainer = Color(0xFF303030),
+    onPrimaryContainer = Color.White,
+    secondary = Color(0xFFA1A1AA),
+    onSecondary = Color.White,
+    secondaryContainer = Color(0xFF303030),
+    onSecondaryContainer = Color.White,
+    tertiary = MontraIncomeGreen,
+    onTertiary = Color.White,
+    background = Color(0xFF1C1C1C),
+    onBackground = Color(0xFFFFFFFF),
+    surface = Color(0xFF262626),
+    onSurface = Color(0xFFFFFFFF),
+    surfaceVariant = Color(0xFF303030),
+    onSurfaceVariant = Color(0xFFA1A1AA),
+    error = MontraExpenseRed,
+    onError = Color.White,
+    outline = Color(0xFF383838)
 )
 
 private val LightColorScheme = lightColorScheme(
@@ -53,12 +95,21 @@ private val LightColorScheme = lightColorScheme(
 
 @Composable
 fun MyApplicationTheme(
+    appTheme: AppTheme = AppTheme.DARK,
     darkTheme: Boolean = true,
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    val palette = if (darkTheme) DarkMontraPalette else LightMontraPalette
-    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
+    val palette = when (appTheme) {
+        AppTheme.OLED -> OledMontraPalette
+        AppTheme.DARK -> DarkMontraPalette
+        AppTheme.LIGHT -> LightMontraPalette
+    }
+    val colorScheme = when (appTheme) {
+        AppTheme.OLED -> OledColorScheme
+        AppTheme.DARK -> DarkColorScheme
+        AppTheme.LIGHT -> LightColorScheme
+    }
 
     CompositionLocalProvider(LocalMontraColors provides palette) {
         MaterialTheme(

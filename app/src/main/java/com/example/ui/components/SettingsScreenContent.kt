@@ -75,6 +75,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.ExpenseUiState
+import com.example.ui.theme.AppTheme
 import com.example.ui.theme.MontraBackground
 import com.example.ui.theme.MontraBorder
 import com.example.ui.theme.MontraButtonBg
@@ -94,6 +95,7 @@ fun SettingsScreenContent(
     onLogout: () -> Unit,
     onCurrencySelected: (com.example.data.SupportedCurrency) -> Unit = {},
     onSetTheme: (Boolean) -> Unit = {},
+    onSetAppTheme: (AppTheme) -> Unit = {},
     onToggleTheme: () -> Unit = {},
     onToggleBiometric: (Boolean) -> Unit = {},
     onLockAppNow: () -> Unit = {},
@@ -210,9 +212,9 @@ fun SettingsScreenContent(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 SettingsItemRow(
-                    icon = if (uiState.isDarkMode) Icons.Filled.DarkMode else Icons.Filled.LightMode,
+                    icon = if (uiState.appTheme == AppTheme.LIGHT) Icons.Filled.LightMode else Icons.Filled.DarkMode,
                     title = "Theme",
-                    value = if (uiState.isDarkMode) "Dark" else "Light",
+                    value = uiState.appTheme.displayName,
                     onClick = { isThemePickerOpen = true },
                     modifier = Modifier.testTag("item_settings_theme")
                 )
@@ -571,24 +573,39 @@ fun SettingsScreenContent(
 
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Customize your visual style with Dark or Light mode",
+                        text = "Customize your visual style with OLED, Dark Mode, or Light theme",
                         fontSize = 12.sp,
                         color = MontraTextSecondary
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Dark Theme Option
+                    // OLED Theme Option
                     ThemeOptionCard(
-                        title = "Dark Theme",
-                        description = "Sleek charcoal night palette (Default)",
+                        title = "OLED",
+                        description = "Pitch-black dark palette for OLED screens",
                         icon = Icons.Filled.DarkMode,
-                        isSelected = uiState.isDarkMode,
+                        isSelected = uiState.appTheme == AppTheme.OLED,
                         onClick = {
-                            onSetTheme(true)
+                            onSetAppTheme(AppTheme.OLED)
                             isThemePickerOpen = false
                         },
-                        testTag = "btn_theme_dark"
+                        testTag = "btn_theme_oled"
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Dark Mode Theme Option (#1c1c1c)
+                    ThemeOptionCard(
+                        title = "Dark Mode",
+                        description = "Sleek #1c1c1c charcoal dark palette (Default)",
+                        icon = Icons.Filled.DarkMode,
+                        isSelected = uiState.appTheme == AppTheme.DARK,
+                        onClick = {
+                            onSetAppTheme(AppTheme.DARK)
+                            isThemePickerOpen = false
+                        },
+                        testTag = "btn_theme_dark_mode"
                     )
 
                     Spacer(modifier = Modifier.height(10.dp))
@@ -598,9 +615,9 @@ fun SettingsScreenContent(
                         title = "Light Theme",
                         description = "Crisp, bright high-contrast light palette",
                         icon = Icons.Filled.LightMode,
-                        isSelected = !uiState.isDarkMode,
+                        isSelected = uiState.appTheme == AppTheme.LIGHT,
                         onClick = {
-                            onSetTheme(false)
+                            onSetAppTheme(AppTheme.LIGHT)
                             isThemePickerOpen = false
                         },
                         testTag = "btn_theme_light"
