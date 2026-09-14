@@ -47,10 +47,10 @@ fun AutomatedEntrySheet(
     var inputText by remember { mutableStateOf("") }
 
     val sampleAlerts = listOf(
+        "BML: Transfer successful • MVR -148.00 • 09-09-2026 448033 N SIX MART MALE MV (Purchase)",
+        "BML: Transfer successful • MVR 440.00 • HUSSAIN AHNAF FAZEEL Internet Banking (Transfer)",
         "Chase Alert: You spent \$42.50 at Trader Joe's on 09/12",
-        "Uber: Your trip of \$18.20 was charged to your card",
-        "Bank of America: Debit card purchase of \$76.10 at Shell Gas Station",
-        "Amex: You made a purchase of \$129.00 at Apple Store"
+        "Bank of Maldives: Debit card purchase of MVR 76.10 at Shell Gas Station"
     )
 
     ModalBottomSheet(

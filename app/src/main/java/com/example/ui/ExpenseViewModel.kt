@@ -796,6 +796,33 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
 
     fun parseBankStatement(bankType: String) {
         val statementSample = when (bankType.uppercase()) {
+            "BML_PURCHASE", "PURCHASE" -> """
+                Bank of Maldives
+                Transfer successful
+                148.00 MVR
+                Status: SUCCESS
+                Transaction ID: RB252AE706145D39
+                Post date: 10/09/2026
+                Transaction date: 10/09/2026
+                From: 7730000738872
+                Reference: FT26253KF4XK\B26
+                Amount: MVR -148.00
+                Description: 09-09-2026 448033 N SIX MART MALE MV 260909
+                Bank of Maldives
+            """.trimIndent()
+            "BML_TRANSFER", "TRANSFER" -> """
+                Bank of Maldives
+                Transfer successful
+                440.00 MVR
+                Status: SUCCESS
+                Transaction ID: BLAZ898410296130
+                Post date: 13/09/2026
+                Transaction date: 13/09/2026
+                Reference: FT2625611DKW\B26
+                Amount: MVR 440.00
+                Description: 13-09-2026 13-09-02 HUSSAIN AHNAF FAZEEL Internet Banking
+                Bank of Maldives
+            """.trimIndent()
             "MIB", "FAISA" -> """
                 MALDIVES ISLAMIC BANK
                 FaisaMobile Fund Transfer Receipt
@@ -1083,11 +1110,12 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
         addExpense(
             title = parsed.merchantOrTitle,
             amount = if (parsed.amount > 0) parsed.amount else 15.00,
-            category = ExpenseCategory.fromString(parsed.categoryHint).name,
+            category = parsed.categoryHint,
             dateMillis = parsed.dateMillis,
             note = parsed.rawNotes,
             currencyCode = _selectedCurrency.value.code,
-            isAutomated = true
+            isAutomated = true,
+            isIncome = parsed.isCreditOrIncome
         )
     }
 

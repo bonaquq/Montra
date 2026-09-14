@@ -99,6 +99,8 @@ val MontraIncomeGreen = Color(0xFF059669)
 val MontraExpenseRed = Color(0xFFEF4444)
 
 // Categories
+val CategoryPurchase = Color(0xFFF43F5E)
+val CategoryTransfer = Color(0xFF0D9488)
 val CategoryRent = Color(0xFF0284C7)
 val CategoryFood = Color(0xFFEA580C)
 val CategoryTransport = Color(0xFF9333EA)

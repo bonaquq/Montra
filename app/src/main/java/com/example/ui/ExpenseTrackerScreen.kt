@@ -187,6 +187,9 @@ fun ExpenseTrackerScreen(
                                         viewModel.setTransactionFilter(filter)
                                         viewModel.setActiveTab(AppTab.TRANSACTIONS)
                                     },
+                                    onManageBudgets = {
+                                        isManageBudgetsSheetOpen = true
+                                    },
                                     onToggleBalanceVisibility = {
                                         viewModel.toggleBalanceVisibility()
                                     },

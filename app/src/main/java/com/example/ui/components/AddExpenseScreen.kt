@@ -219,8 +219,20 @@ fun AddExpenseScreen(
             if (data.dateMillis > 0L) {
                 dateMillis = data.dateMillis
             }
-            val resolvedItem = CategoryRegistry.getCategoryItem(data.categoryHint)
-            selectedCategoryKey = resolvedItem.name
+            if (data.isCreditOrIncome) {
+                isIncome = true
+                currentTab = AddExpenseTab.INCOME
+                selectedCategoryKey = if (data.categoryHint.equals("TRANSFER", ignoreCase = true)) {
+                    "TRANSFER"
+                } else {
+                    ExpenseCategory.INCOME.name
+                }
+            } else {
+                isIncome = false
+                currentTab = AddExpenseTab.EXPENSE
+                val resolvedItem = CategoryRegistry.getCategoryItem(data.categoryHint)
+                selectedCategoryKey = resolvedItem.name
+            }
             scanNotice = "Auto-extracted: ${data.merchantOrTitle} (${data.categoryHint}) - ${selectedCurrency.symbol}${String.format(java.util.Locale.US, "%.2f", data.amount)}"
         }
     }

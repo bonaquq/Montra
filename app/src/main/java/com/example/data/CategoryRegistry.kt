@@ -103,6 +103,8 @@ object CategoryRegistry {
         // Try standard ExpenseCategory
         val standard = ExpenseCategory.fromString(clean)
         val pastel = when (standard) {
+            ExpenseCategory.PURCHASE -> Color(0xFFFFE4E6)
+            ExpenseCategory.TRANSFER -> Color(0xFFCCFBF1)
             ExpenseCategory.FOOD -> Color(0xFFE0F2FE)
             ExpenseCategory.TRANSPORT -> Color(0xFFF3E8FF)
             ExpenseCategory.SHOPPING -> Color(0xFFFFEDD5)

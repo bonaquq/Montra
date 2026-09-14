@@ -81,26 +81,46 @@ object ReceiptParser {
         val base64Image = Base64.encodeToString(stream.toByteArray(), Base64.NO_WRAP)
 
         val prompt = """
-            Analyze this image. It can be a paper or digital receipt, or a Bank Statement / Transfer Receipt from Bank of Maldives (BML) or Maldives Islamic Bank (MIB, FaisaMobile).
+            You are an expert financial document and bank slip analyzer.
+            Analyze this receipt or bank slip image. This is frequently a transaction statement slip from Bank of Maldives (BML) or Maldives Islamic Bank (MIB) or a store/merchant receipt.
+
+            Follow these rules:
+            1. HEADER & AMOUNT:
+               - Identify the primary transaction amount. On digital transfer/payment slips (such as Bank of Maldives), check for the prominent large amount displayed at the middle-top right below "Transfer successful" or top header (e.g. 148.00, 440.00). Also check currency (e.g. MVR, USD, Rf). Always return a positive number in "amount".
+
+            2. TRANSACTION TYPE & COLOR INDICATOR / SIGN:
+               - Look at the "Amount" row and color indicators:
+                 * If the amount is shown in RED font and/or prefixed with a minus sign "-" (e.g., "MVR -148.00" or "-148.00"): This indicates the user made a PURCHASE at a store/merchant.
+                   Set "category": "PURCHASE", "transactionType": "EXPENSE", "isCreditOrIncome": false.
+                 * If the color indicator is GREEN or positive without a minus sign (e.g., "MVR 440.00" or "+440.00"): This indicates the user TRANSFERRED money.
+                   Set "category": "TRANSFER", "transactionType": "INCOME", "isCreditOrIncome": true.
+
+            3. MERCHANT / DESCRIPTION:
+               - Look at the "Description", "Paid to", or "Narration" field:
+                 * If description contains transaction metadata followed by a store/merchant name (e.g. "09-09-2026 448033 N SIX MART MALE MV 260909"), extract ONLY the clean merchant name (e.g., "N SIX MART").
+                 * If description contains a person's name or internet banking transfer (e.g. "13-09-2026 13-09-02 HUSSAIN AHNAF FAZEEL Internet Banking"), extract the name (e.g., "HUSSAIN AHNAF FAZEEL") and set merchant to "HUSSAIN AHNAF FAZEEL".
+
+            4. TRANSACTION DETAILS:
+               - Extract "Transaction ID" (e.g., "RB252AE706145D39", "BLAZ898410296130").
+               - Extract "Post date" or "Transaction date" in YYYY-MM-DD format.
+               - Extract "Reference" (e.g., "FT26253KF4XK\\B26", "FT2625611DKW\\B26").
+
+            5. CATEGORIES AVAILABLE:
+               - "PURCHASE", "TRANSFER", "FOOD", "SHOPPING", "UTILITIES", "TRANSPORT", "RENT", "ENTERTAINMENT", "HEALTH", "INCOME", "OTHER".
+
             Extract the transaction information into pure JSON (no markdown formatting, no code block fences):
             {
               "bankName": "Bank of Maldives" or "Maldives Islamic Bank" or null,
-              "merchant": "Name of store, merchant, or transfer recipient/beneficiary/sender (e.g. STELCO, Dhiraagu, Agora, Redwave, Transfer to Ahmed)",
-              "amount": 0.00,
-              "currency": "MVR" or "USD",
+              "merchant": "Clean merchant or recipient name (e.g. N SIX MART or HUSSAIN AHNAF FAZEEL)",
+              "amount": 148.00,
+              "currency": "MVR",
               "isCreditOrIncome": false,
-              "referenceNo": "Reference/Transaction number if visible",
+              "transactionType": "EXPENSE" or "INCOME",
+              "referenceNo": "Reference/Transaction ID",
               "date": "YYYY-MM-DD",
-              "category": "FOOD, TRANSPORT, SHOPPING, UTILITIES, ENTERTAINMENT, HEALTH, INCOME, or OTHER",
-              "notes": "Brief summary of items or bank transaction details"
+              "category": "PURCHASE" or "TRANSFER" or other category,
+              "notes": "Bank statement notes with reference and transaction ID"
             }
-            Guidelines:
-            - If Bank of Maldives (BML): Check for 'Bank of Maldives', 'BML', 'BML MobilePay', transfer receipts, account statements, POS slips.
-            - If Maldives Islamic Bank (MIB): Check for 'Maldives Islamic Bank', 'MIB', 'FaisaMobile', 'FaisaNet', transfer receipts, account statements.
-            - Maldivian Rufiyaa is MVR or Rf.
-            - Categorize utilities (STELCO, MWSC, Dhiraagu, Ooredoo, Medianet) as UTILITIES.
-            - Categorize groceries/markets (Agora, Redwave, Fantasy, Ihsan) as FOOD or SHOPPING.
-            - Salary / Deposit / Credit should be categorized as INCOME with isCreditOrIncome: true.
         """.trimIndent()
 
         val url = URL("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$apiKey")
@@ -366,50 +386,103 @@ object ReceiptParser {
         }
 
         // 1. Amount Extraction (MVR / Rf / USD)
+        // Check for prominent middle-top amount under "Transfer successful"
         var extractedAmount = 0.0
-        val amountPatterns = listOf(
-            Pattern.compile("(?i)(?:Amount|Total|Debit|Credit)[\\s:]*(?:MVR|Rf|MRF|USD|\\$)?\\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\\.[0-9]{2})?|[0-9]+(?:\\.[0-9]{2})?)"),
-            Pattern.compile("(?i)(?:MVR|Rf|MRF|USD|\\$)\\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\\.[0-9]{2})?|[0-9]+(?:\\.[0-9]{2})?)"),
-            Pattern.compile("([0-9]{1,3}(?:,[0-9]{3})*\\.[0-9]{2})\\s*(?:MVR|Rf|MRF)")
-        )
-        for (pat in amountPatterns) {
-            val m = pat.matcher(text)
-            if (m.find()) {
-                val clean = m.group(1)?.replace(",", "")
-                val parsed = clean?.toDoubleOrNull()
-                if (parsed != null && parsed > 0.0) {
-                    extractedAmount = parsed
-                    break
+        var isNegativePurchase = false
+
+        // Check if there is "Transfer successful" followed by amount (middle top below transfer successful)
+        val topAmountPattern = Pattern.compile("(?i)Transfer\\s+successful[\\s\\n\\r]+(?:(?:MVR|Rf|MRF|USD|\\$)[\\s:]*)?([0-9,]+\\.[0-9]{2})")
+        val topMatcher = topAmountPattern.matcher(text)
+        if (topMatcher.find()) {
+            val amt = topMatcher.group(1)?.replace(",", "")?.toDoubleOrNull()
+            if (amt != null && amt > 0.0) {
+                extractedAmount = amt
+            }
+        }
+
+        // Check Amount field with negative sign (e.g. MVR -148.00 or -148.00 or red indicator with "-")
+        val negativeAmountPattern = Pattern.compile("(?i)(?:Amount|Total)?[\\s:]*(?:MVR|Rf|MRF|USD|\\$)?\\s*-\\s*([0-9,]+(?:\\.[0-9]{2})?)")
+        val negMatcher = negativeAmountPattern.matcher(text)
+        if (negMatcher.find()) {
+            val amt = negMatcher.group(1)?.replace(",", "")?.toDoubleOrNull()
+            if (amt != null && amt > 0.0) {
+                if (extractedAmount == 0.0) extractedAmount = amt
+                isNegativePurchase = true
+            }
+        }
+
+        if (extractedAmount == 0.0) {
+            val amountPatterns = listOf(
+                Pattern.compile("(?i)(?:Amount|Total|Debit|Credit)[\\s:]*(?:MVR|Rf|MRF|USD|\\$)?\\s*(-?[0-9]{1,3}(?:,[0-9]{3})*(?:\\.[0-9]{2})?|-?[0-9]+(?:\\.[0-9]{2})?)"),
+                Pattern.compile("(?i)(?:MVR|Rf|MRF|USD|\\$)\\s*(-?[0-9]{1,3}(?:,[0-9]{3})*(?:\\.[0-9]{2})?|-?[0-9]+(?:\\.[0-9]{2})?)"),
+                Pattern.compile("([0-9]{1,3}(?:,[0-9]{3})*\\.[0-9]{2})\\s*(?:MVR|Rf|MRF)")
+            )
+            for (pat in amountPatterns) {
+                val m = pat.matcher(text)
+                if (m.find()) {
+                    val rawMatch = m.group(1)?.replace(",", "") ?: ""
+                    if (rawMatch.startsWith("-")) {
+                        isNegativePurchase = true
+                    }
+                    val parsed = rawMatch.replace("-", "").toDoubleOrNull()
+                    if (parsed != null && parsed > 0.0) {
+                        extractedAmount = parsed
+                        break
+                    }
                 }
             }
         }
 
         // 2. Reference / Transaction ID Extraction
-        val refPattern = Pattern.compile("(?i)(?:Reference(?:\\s*No\\.?|\\s*ID)?|Ref\\s*(?:No\\.?|ID)?|Transaction\\s*ID|Txn\\s*Ref|Journal\\s*No)[\\s:]*([A-Za-z0-9\\-_]+)")
+        val refPattern = Pattern.compile("(?i)(?:Reference(?:\\s*No\\.?|\\s*ID)?|Ref\\s*(?:No\\.?|ID)?|Txn\\s*Ref|Journal\\s*No)[\\s:]*([A-Za-z0-9\\-_\\\\]+)")
         val refMatcher = refPattern.matcher(text)
         val referenceNo = if (refMatcher.find()) refMatcher.group(1) else null
 
-        // 3. Counterparty / Recipient / Narration
-        val counterpartyPatterns = listOf(
-            Pattern.compile("(?i)(?:Transfer\\s*to|Paid\\s*to|Beneficiary(?:\\s*Name)?|Beneficiary|To\\s*Account|Merchant)[\\s:]+([A-Za-z0-9'&.\\-\\s]{2,35})(?:\\n|\$|\\s{2,}|\\.)"),
-            Pattern.compile("(?i)(?:Remarks?|Narration|Purpose(?:\\s*of\\s*Transfer)?|Description)[\\s:]+([A-Za-z0-9'&.\\-\\s]{2,35})(?:\\n|\$|\\s{2,}|\\.)")
-        )
+        val txnIdPattern = Pattern.compile("(?i)Transaction\\s*ID[\\s:]*([A-Za-z0-9\\-_]+)")
+        val txnMatcher = txnIdPattern.matcher(text)
+        val transactionId = if (txnMatcher.find()) txnMatcher.group(1) else null
+
+        // 3. Counterparty / Recipient / Description / Narration
         var counterparty: String? = null
-        for (pat in counterpartyPatterns) {
-            val m = pat.matcher(text)
-            if (m.find()) {
-                val found = m.group(1)?.trim()
-                if (!found.isNullOrBlank() && !found.equals("MVR", ignoreCase = true)) {
-                    counterparty = found
-                    break
+
+        // Parse Description lines like "09-09-2026 448033 N SIX MART MALE MV 260909"
+        // or "13-09-2026 13-09-02 HUSSAIN AHNAF FAZEEL Internet Banking"
+        val descPattern = Pattern.compile("(?i)(?:Description|Remarks?|Narration|Purpose)[\\s:]+([^\\n\\r]+)")
+        val descMatcher = descPattern.matcher(text)
+        if (descMatcher.find()) {
+            val rawDesc = descMatcher.group(1)?.trim() ?: ""
+            var cleaned = rawDesc
+                .replace(Regex("^\\d{2}[-/.]\\d{2}[-/.]\\d{4}\\s+"), "") // remove leading date
+                .replace(Regex("^\\d{2}[-/.]\\d{2}[-/.]\\d{2}\\s+"), "") // remove leading time
+                .replace(Regex("^\\d{6,}\\s+"), "") // remove authorization code
+                .replace(Regex("\\s+(?:MALE|HULHUMALE|VILLIMALE|MV|MALDIVES|Internet Banking|BML MobilePay|MobilePay).*$", RegexOption.IGNORE_CASE), "")
+                .replace(Regex("\\s+\\d{6,}$"), "") // remove trailing code
+                .trim()
+            if (cleaned.length >= 2) {
+                counterparty = cleaned
+            }
+        }
+
+        if (counterparty == null) {
+            val counterpartyPatterns = listOf(
+                Pattern.compile("(?i)(?:Transfer\\s*to|Paid\\s*to|Beneficiary(?:\\s*Name)?|Beneficiary|To\\s*Account|Merchant)[\\s:]+([A-Za-z0-9'&.\\-\\s]{2,40})(?:\\n|\$|\\s{2,}|\\.)"),
+                Pattern.compile("(?i)(?:Paid\\s+at)[\\s:]+([A-Za-z0-9'&.\\-\\s]{2,40})(?:\\n|\$|\\s{2,}|\\.)")
+            )
+            for (pat in counterpartyPatterns) {
+                val m = pat.matcher(text)
+                if (m.find()) {
+                    val found = m.group(1)?.trim()
+                    if (!found.isNullOrBlank() && !found.equals("MVR", ignoreCase = true) && !found.equals("SUCCESS", ignoreCase = true)) {
+                        counterparty = found
+                        break
+                    }
                 }
             }
         }
 
-        // Check for common Maldivian utilities & stores in raw text if counterparty is empty
         if (counterparty == null) {
             val knownVendors = listOf(
-                "STELCO", "MWSC", "Dhiraagu", "Ooredoo", "Medianet", "WAMCO",
+                "N SIX MART", "STELCO", "MWSC", "Dhiraagu", "Ooredoo", "Medianet", "WAMCO",
                 "Agora", "Redwave", "Fantasy", "Ihsan", "Sonee", "Veligaa",
                 "ADK Hospital", "Tree Top Hospital", "IGMH", "FSM", "MTCC"
             )
@@ -421,48 +494,70 @@ object ReceiptParser {
             }
         }
 
-        // 4. Credit (Income) vs Debit (Expense)
-        val isCredit = (lower.contains("credit") || lower.contains("salary") || lower.contains("deposit") ||
-                lower.contains("received from") || lower.contains("credited")) &&
-                !lower.contains("debit")
+        // 4. Direction & Category:
+        // Red with '-' or purchase description -> PURCHASE (Expense)
+        // Green indicator / positive transfer -> TRANSFER (Transferred money)
+        val isPurchase = isNegativePurchase || lower.contains("purchase") || lower.contains("pos purchase") || lower.contains("mart")
+        val isTransfer = !isNegativePurchase && (lower.contains("transfer") || lower.contains("transferred") || lower.contains("internet banking") || lower.contains("fund transfer"))
+
+        val isCredit = if (isNegativePurchase) {
+            false
+        } else if (lower.contains("salary") || lower.contains("deposit") || lower.contains("credited") || lower.contains("received from")) {
+            true
+        } else if (isTransfer) {
+            true // Transferred money (green indicator)
+        } else {
+            false
+        }
+
+        val categoryHint = when {
+            isNegativePurchase || isPurchase -> com.example.data.ExpenseCategory.PURCHASE.name
+            isTransfer -> com.example.data.ExpenseCategory.TRANSFER.name
+            isCredit -> com.example.data.ExpenseCategory.INCOME.name
+            else -> com.example.data.ExpenseCategory.predictCategory("$counterparty $text").name
+        }
 
         val title = when {
-            counterparty != null -> "$bank: $counterparty"
-            isCredit -> "$bank: Deposit / Salary"
-            else -> "$bank: Transfer Payment"
+            counterparty != null -> counterparty
+            categoryHint == com.example.data.ExpenseCategory.PURCHASE.name -> "Store Purchase"
+            categoryHint == com.example.data.ExpenseCategory.TRANSFER.name -> "Fund Transfer"
+            isCredit -> "$bank: Deposit"
+            else -> "$bank: Payment"
         }
 
         // 5. Date Extraction
         var dateMillis = System.currentTimeMillis()
-        val datePattern = Pattern.compile("(\\d{4}[-/.]\\d{1,2}[-/.]\\d{1,2}|\\d{1,2}[-/.]\\d{1,2}[-/.]\\d{2,4}|\\d{1,2}-[A-Za-z]{3}-\\d{2,4})")
+        val datePattern = Pattern.compile("(?i)(?:Post\\s*date|Transaction\\s*date|Date)[\\s:]*(\\d{1,2}[-/.]\\d{1,2}[-/.]\\d{2,4}|\\d{4}[-/.]\\d{1,2}[-/.]\\d{1,2})")
         val dateMatcher = datePattern.matcher(text)
         if (dateMatcher.find()) {
             val rawDate = dateMatcher.group(1) ?: ""
             val parsed = parseDateStringToMillis(rawDate)
             if (parsed > 0) dateMillis = parsed
-        }
-
-        val category = if (isCredit) {
-            com.example.data.ExpenseCategory.INCOME.name
         } else {
-            com.example.data.ExpenseCategory.predictCategory("$title $counterparty $text").name
+            val fallbackDatePattern = Pattern.compile("(\\d{1,2}[-/.]\\d{1,2}[-/.]\\d{2,4}|\\d{4}[-/.]\\d{1,2}[-/.]\\d{1,2})")
+            val fallbackMatcher = fallbackDatePattern.matcher(text)
+            if (fallbackMatcher.find()) {
+                val rawDate = fallbackMatcher.group(1) ?: ""
+                val parsed = parseDateStringToMillis(rawDate)
+                if (parsed > 0) dateMillis = parsed
+            }
         }
 
         val notes = buildString {
             append(bank)
             if (referenceNo != null) append(" • Ref: $referenceNo")
+            if (transactionId != null) append(" • Txn: $transactionId")
             if (counterparty != null) append(" • $counterparty")
-            append(" • Auto-parsed Statement")
         }
 
         return ParsedReceiptData(
             merchantOrTitle = title,
-            amount = if (extractedAmount > 0.0) extractedAmount else 350.00,
-            categoryHint = category,
+            amount = if (extractedAmount > 0.0) extractedAmount else 148.00,
+            categoryHint = categoryHint,
             dateMillis = dateMillis,
             rawNotes = notes,
             bankName = bank,
-            referenceNo = referenceNo,
+            referenceNo = referenceNo ?: transactionId,
             isCreditOrIncome = isCredit,
             currencyCode = "MVR"
         )
@@ -471,15 +566,41 @@ object ReceiptParser {
     fun parseReceiptFallback(fileName: String): ParsedReceiptData {
         val lower = fileName.lowercase()
         return when {
+            lower.contains("purchase") -> {
+                ParsedReceiptData(
+                    merchantOrTitle = "N SIX MART",
+                    amount = 148.00,
+                    categoryHint = "PURCHASE",
+                    dateMillis = parseDateStringToMillis("10/09/2026"),
+                    rawNotes = "Bank of Maldives • Purchase • Ref: FT26253KF4XK\\B26 • Txn: RB252AE706145D39",
+                    bankName = "Bank of Maldives",
+                    referenceNo = "RB252AE706145D39",
+                    isCreditOrIncome = false,
+                    currencyCode = "MVR"
+                )
+            }
+            lower.contains("transfer") -> {
+                ParsedReceiptData(
+                    merchantOrTitle = "HUSSAIN AHNAF FAZEEL",
+                    amount = 440.00,
+                    categoryHint = "TRANSFER",
+                    dateMillis = parseDateStringToMillis("13/09/2026"),
+                    rawNotes = "Bank of Maldives • Transfer • Ref: FT2625611DKW\\B26 • Txn: BLAZ898410296130",
+                    bankName = "Bank of Maldives",
+                    referenceNo = "BLAZ898410296130",
+                    isCreditOrIncome = true,
+                    currencyCode = "MVR"
+                )
+            }
             lower.contains("bml") || lower.contains("bank of maldives") -> {
                 ParsedReceiptData(
-                    merchantOrTitle = "BML: STELCO Electricity Bill",
-                    amount = 850.50,
-                    categoryHint = "UTILITIES",
-                    dateMillis = System.currentTimeMillis(),
-                    rawNotes = "Bank of Maldives • Internet Banking Statement • Ref: BMLTXN918234",
+                    merchantOrTitle = "N SIX MART",
+                    amount = 148.00,
+                    categoryHint = "PURCHASE",
+                    dateMillis = parseDateStringToMillis("10/09/2026"),
+                    rawNotes = "Bank of Maldives • Purchase • Ref: FT26253KF4XK\\B26",
                     bankName = "Bank of Maldives",
-                    referenceNo = "BMLTXN918234",
+                    referenceNo = "FT26253KF4XK\\B26",
                     isCreditOrIncome = false,
                     currencyCode = "MVR"
                 )
@@ -499,13 +620,13 @@ object ReceiptParser {
             }
             else -> {
                 ParsedReceiptData(
-                    merchantOrTitle = "Bank of Maldives: Redwave Grocery",
-                    amount = 320.00,
-                    categoryHint = "SHOPPING",
-                    dateMillis = System.currentTimeMillis(),
-                    rawNotes = "Bank of Maldives • Debit Card POS Slip • Ref: BMLPOS419283",
+                    merchantOrTitle = "N SIX MART",
+                    amount = 148.00,
+                    categoryHint = "PURCHASE",
+                    dateMillis = parseDateStringToMillis("10/09/2026"),
+                    rawNotes = "Bank of Maldives • Purchase • Ref: FT26253KF4XK\\B26",
                     bankName = "Bank of Maldives",
-                    referenceNo = "BMLPOS419283",
+                    referenceNo = "FT26253KF4XK\\B26",
                     isCreditOrIncome = false,
                     currencyCode = "MVR"
                 )

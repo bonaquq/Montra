@@ -188,7 +188,7 @@ fun CategoriesScreenContent(
         ) {
             Column {
                 Text(
-                    text = "Categories & Budgets",
+                    text = "Categories",
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
                     color = MontraTextPrimary,
@@ -201,34 +201,6 @@ fun CategoriesScreenContent(
                     modifier = Modifier.testTag("txt_categories_count")
                 )
             }
-
-            Surface(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable { onManageBudgets() }
-                    .testTag("btn_manage_all_budgets"),
-                color = Color(0xFF6366F1).copy(alpha = 0.15f),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Tune,
-                        contentDescription = null,
-                        tint = Color(0xFF818CF8),
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Text(
-                        text = "Budgets",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF818CF8)
-                    )
-                }
-            }
         }
 
         LazyColumn(
@@ -236,142 +208,6 @@ fun CategoriesScreenContent(
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 90.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Overall Budget Summary Card
-            if (overallBudget != null) {
-                item {
-                    val isExceeded = overallBudget.currentSpent > overallBudget.monthlyLimit && overallBudget.monthlyLimit > 0
-                    val progressFraction = if (overallBudget.monthlyLimit > 0) {
-                        (overallBudget.currentSpent / overallBudget.monthlyLimit).toFloat().coerceIn(0f, 1f)
-                    } else 0f
-                    val progressColor = if (isExceeded) Color(0xFFEF4444) else if (progressFraction > 0.8f) Color(0xFFF59E0B) else Color(0xFF6366F1)
-
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(18.dp))
-                            .clickable { onManageBudgets() }
-                            .testTag("card_overall_budget_summary"),
-                        shape = RoundedCornerShape(18.dp),
-                        colors = CardDefaults.cardColors(containerColor = MontraSurface),
-                        border = androidx.compose.foundation.BorderStroke(
-                            1.dp, 
-                            if (isExceeded) Color(0xFFEF4444).copy(alpha = 0.5f) else MontraBorder
-                        ),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.AccountBalanceWallet,
-                                        contentDescription = null,
-                                        tint = progressColor,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Text(
-                                        text = "Overall Monthly Budget",
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MontraTextPrimary
-                                    )
-                                }
-
-                                Text(
-                                    text = if (isExceeded) "Exceeded!" else "Edit",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = if (isExceeded) Color(0xFFEF4444) else Color(0xFF818CF8)
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(10.dp))
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.Bottom
-                            ) {
-                                Column {
-                                    Text(
-                                        text = "Spent this month",
-                                        fontSize = 11.sp,
-                                        color = MontraTextSecondary
-                                    )
-                                    Text(
-                                        text = FormatUtils.formatCurrency(overallBudget.currentSpent, currency),
-                                        fontSize = 18.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MontraTextPrimary
-                                    )
-                                }
-
-                                Column(horizontalAlignment = Alignment.End) {
-                                    Text(
-                                        text = "Monthly limit",
-                                        fontSize = 11.sp,
-                                        color = MontraTextSecondary
-                                    )
-                                    Text(
-                                        text = FormatUtils.formatCurrency(overallBudget.monthlyLimit, currency),
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = MontraTextSecondary
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(10.dp))
-
-                            // Progress bar
-                            LinearProgressIndicator(
-                                progress = { progressFraction },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(8.dp)
-                                    .clip(RoundedCornerShape(4.dp)),
-                                color = progressColor,
-                                trackColor = MontraBackground
-                            )
-
-                            Spacer(modifier = Modifier.height(6.dp))
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                val pctUsed = if (overallBudget.monthlyLimit > 0) (overallBudget.currentSpent / overallBudget.monthlyLimit * 100).toInt() else 0
-                                Text(
-                                    text = "$pctUsed% used",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = if (isExceeded) Color(0xFFEF4444) else MontraTextSecondary
-                                )
-                                Text(
-                                    text = if (isExceeded) {
-                                        "Over by ${FormatUtils.formatCurrency(overallBudget.currentSpent - overallBudget.monthlyLimit, currency)}"
-                                    } else {
-                                        "${FormatUtils.formatCurrency(overallBudget.remaining, currency)} remaining"
-                                    },
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = if (isExceeded) Color(0xFFEF4444) else MontraTextSecondary
-                                )
-                            }
-                        }
-                    }
-                }
-            }
 
             // "Create your own category" prompt card
             item {

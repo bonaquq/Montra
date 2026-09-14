@@ -1,6 +1,7 @@
 package com.example.data
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.CompareArrows
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Category
@@ -8,6 +9,7 @@ import androidx.compose.material.icons.filled.DirectionsBus
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.PointOfSale
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material.icons.filled.SportsEsports
@@ -20,9 +22,11 @@ import com.example.ui.theme.CategoryFood
 import com.example.ui.theme.CategoryHealth
 import com.example.ui.theme.CategoryIncome
 import com.example.ui.theme.CategoryOther
+import com.example.ui.theme.CategoryPurchase
 import com.example.ui.theme.CategoryRent
 import com.example.ui.theme.CategorySalary
 import com.example.ui.theme.CategoryShopping
+import com.example.ui.theme.CategoryTransfer
 import com.example.ui.theme.CategoryTransport
 import com.example.ui.theme.CategoryUtilities
 
@@ -30,6 +34,8 @@ enum class ExpenseCategory(
     val displayName: String,
     val color: Color
 ) {
+    PURCHASE("Purchase", CategoryPurchase),
+    TRANSFER("Transfer", CategoryTransfer),
     RENT("Rent", CategoryRent),
     FOOD("Food & Drink", CategoryFood),
     TRANSPORT("Transport", CategoryTransport),
@@ -45,6 +51,8 @@ enum class ExpenseCategory(
 
     val icon: ImageVector
         get() = when (this) {
+            PURCHASE -> Icons.Filled.PointOfSale
+            TRANSFER -> Icons.AutoMirrored.Filled.CompareArrows
             RENT -> Icons.Filled.Home
             FOOD -> Icons.Filled.Restaurant
             TRANSPORT -> Icons.Filled.DirectionsBus
@@ -64,6 +72,8 @@ enum class ExpenseCategory(
                 "BILLS" -> UTILITIES
                 "SALARY" -> INCOME
                 "INCOME" -> INCOME
+                "PURCHASE", "PURCHASES", "POS" -> PURCHASE
+                "TRANSFER", "TRANSFERS", "FUND TRANSFER" -> TRANSFER
                 else -> entries.firstOrNull { 
                     it.name.equals(trimmed, ignoreCase = true) || 
                     it.displayName.equals(trimmed, ignoreCase = true) 
@@ -75,9 +85,15 @@ enum class ExpenseCategory(
         fun predictCategory(text: String): ExpenseCategory {
             val lower = text.lowercase()
             return when {
-                lower.contains("salary") || lower.contains("paycheck") || lower.contains("deposit") ||
-                lower.contains("freelance") || lower.contains("income") || lower.contains("bonus") ||
+                lower.contains("salary") || lower.contains("paycheck") ||
+                lower.contains("freelance") || lower.contains("bonus") ||
                 lower.contains("payroll") || lower.contains("allowance") -> INCOME
+
+                lower.contains("transfer") || lower.contains("transferred") || lower.contains("fund transfer") ||
+                lower.contains("internet banking") || lower.contains("faisamobile") || lower.contains("faisanet") -> TRANSFER
+
+                lower.contains("purchase") || lower.contains("pos purchase") || lower.contains("mart") ||
+                lower.contains("store purchase") || lower.contains("debit card purchase") -> PURCHASE
 
                 lower.contains("rent") || lower.contains("lease") || lower.contains("landlord") ||
                 lower.contains("apartment") || lower.contains("housing") -> RENT
