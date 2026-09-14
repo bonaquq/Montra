@@ -53,6 +53,7 @@ enum class ChartType {
 }
 
 enum class TimeRange(val label: String) {
+    TODAY("Today"),
     THIS_MONTH("This Month"),
     THIS_WEEK("This Week"),
     LAST_30_DAYS("30 Days"),
@@ -74,8 +75,17 @@ data class BudgetStatus(
     val monthlyLimit: Double,
     val currentSpent: Double,
     val percentUsed: Float,
-    val remaining: Double
+    val remaining: Double,
+    val dailyLimit: Double = 0.0,
+    val todaySpent: Double = 0.0,
+    val dailyPercentUsed: Float = 0f,
+    val dailyRemaining: Double = 0.0
 )
+
+enum class BudgetPeriod(val displayName: String) {
+    MONTHLY("Monthly"),
+    DAILY("Daily")
+}
 
 data class BudgetAlert(
     val categoryName: String,
@@ -103,6 +113,24 @@ data class DailyAnalyticsBar(
     val isHighest: Boolean = false
 )
 
+data class CurrencyIncomeSummary(
+    val currencyCode: String,
+    val currency: SupportedCurrency,
+    val totalAmount: Double,
+    val count: Int
+)
+
+data class ForeignCurrencyRecord(
+    val currency: SupportedCurrency,
+    val currencyCode: String,
+    val totalIncome: Double,
+    val totalExpense: Double,
+    val netAmount: Double,
+    val convertedToMain: Double,
+    val count: Int,
+    val exchangeRateToMain: Double
+)
+
 data class ExpenseUiState(
     val activeTab: AppTab = AppTab.HOME,
     val reportSubTab: ReportSubTab = ReportSubTab.EXPENSES,
@@ -112,6 +140,9 @@ data class ExpenseUiState(
     val totalBalance: Double = 0.0,
     val totalSpent: Double = 0.0,
     val totalIncome: Double = 0.0,
+    val incomeByCurrency: List<CurrencyIncomeSummary> = emptyList(),
+    val foreignCurrencyRecords: List<ForeignCurrencyRecord> = emptyList(),
+    val totalForeignHoldingsInMainCurrency: Double = 0.0,
     val isBalanceHidden: Boolean = false,
     val activeAccount: UserAccount? = null,
     val allAccounts: List<UserAccount> = emptyList(),
@@ -129,11 +160,13 @@ data class ExpenseUiState(
     val dismissedBudgetAlerts: Set<String> = emptySet(),
     val budgetWarningThresholdPercent: Int = 80,
     val recentBudgetAlertMessage: String? = null,
+    val overallBudgetPeriod: BudgetPeriod = BudgetPeriod.MONTHLY,
+    val daysInCurrentMonth: Int = 30,
     val aiInsights: List<AiInsightItem> = emptyList(),
     val financialHealthScore: Int = 85,
     val selectedTimeRange: TimeRange = TimeRange.THIS_MONTH,
     val selectedCategory: ExpenseCategory? = null,
-    val selectedCurrency: SupportedCurrency = SupportedCurrency.USD,
+    val selectedCurrency: SupportedCurrency = SupportedCurrency.MVR,
     val searchQuery: String = "",
     val transactionFilter: String = "ALL", // "ALL", "EXPENSES", "INCOME"
     val analyticsPeriod: String = "WEEKLY", // "WEEKLY", "MONTHLY", "YEARLY", "CUSTOM"
@@ -205,6 +238,9 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
     private val _recentBudgetAlertMessage = MutableStateFlow<String?>(null)
     val recentBudgetAlertMessage: StateFlow<String?> = _recentBudgetAlertMessage
 
+    private val _overallBudgetPeriod = MutableStateFlow(BudgetPeriod.MONTHLY)
+    val overallBudgetPeriod: StateFlow<BudgetPeriod> = _overallBudgetPeriod
+
     private val _savingsGoals = MutableStateFlow(
         listOf(
             SavingsGoal("goal_1", "House by the Sea", 1000.0, 1750.0, "30% behind schedule", "HOUSE"),
@@ -219,7 +255,9 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
     private val _selectedCategory = MutableStateFlow<ExpenseCategory?>(null)
     val selectedCategory: StateFlow<ExpenseCategory?> = _selectedCategory
 
-    private val _selectedCurrency = MutableStateFlow(SupportedCurrency.USD)
+    private val _selectedCurrency = MutableStateFlow(
+        SupportedCurrency.fromCode(prefs.getString("pref_currency", "MVR"))
+    )
     val selectedCurrency: StateFlow<SupportedCurrency> = _selectedCurrency
 
     private val _searchQuery = MutableStateFlow("")
@@ -316,7 +354,8 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
         val isBiometricEnabled: Boolean,
         val isAppUnlocked: Boolean,
         val biometricError: String?,
-        val isDeveloperUnlocked: Boolean
+        val isDeveloperUnlocked: Boolean,
+        val overallBudgetPeriod: BudgetPeriod
     )
 
     @Suppress("UNCHECKED_CAST")
@@ -342,7 +381,8 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
         _isBiometricEnabled,
         _isAppUnlocked,
         _biometricErrorMessage,
-        _isDeveloperUnlocked
+        _isDeveloperUnlocked,
+        _overallBudgetPeriod
     ) { args: Array<Any?> ->
         FilterCriteria(
             timeRange = args[0] as TimeRange,
@@ -366,7 +406,8 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
             isBiometricEnabled = args[18] as Boolean,
             isAppUnlocked = args[19] as Boolean,
             biometricError = args[20] as? String,
-            isDeveloperUnlocked = args[21] as Boolean
+            isDeveloperUnlocked = args[21] as Boolean,
+            overallBudgetPeriod = args[22] as BudgetPeriod
         )
     }
 
@@ -409,11 +450,58 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
 
         val rangeFiltered = filterByTimeRange(allExpenses, criteria.timeRange)
 
-        val expenseItems = rangeFiltered.filter { !it.isIncome }
-        val incomeItems = rangeFiltered.filter { it.isIncome }
+        // Main currency transactions only - foreign currencies do not mix into main balance/metrics
+        val expenseItems = rangeFiltered.filter { !it.isIncome && it.currency == currency }
+        val incomeItems = rangeFiltered.filter { it.isIncome && it.currency == currency }
 
-        val totalSpentValue = expenseItems.sumOf { convertAmount(it) }
-        val totalIncomeValue = incomeItems.sumOf { convertAmount(it) }
+        val totalSpentValue = expenseItems.sumOf { it.amount }
+        val totalIncomeValue = incomeItems.sumOf { it.amount }
+
+        // Multi-currency income summary - only for currencies with >0 income recorded
+        val incomeByCurrencyList = allExpenses.filter { it.isIncome }
+            .groupBy { it.currencyCode.uppercase() }
+            .map { (code, list) ->
+                val cur = SupportedCurrency.fromCode(code)
+                val sum = list.sumOf { it.amount }
+                CurrencyIncomeSummary(
+                    currencyCode = cur.code,
+                    currency = cur,
+                    totalAmount = sum,
+                    count = list.size
+                )
+            }
+            .filter { it.totalAmount > 0 }
+            .sortedByDescending { it.totalAmount }
+
+        // Foreign currency records - transactions in non-main currencies or foreign holdings
+        val foreignRecordsList = allExpenses
+            .groupBy { it.currencyCode.uppercase() }
+            .filter { (code, _) ->
+                val cur = SupportedCurrency.fromCode(code)
+                cur != currency
+            }
+            .map { (code, list) ->
+                val cur = SupportedCurrency.fromCode(code)
+                val inc = list.filter { it.isIncome }.sumOf { it.amount }
+                val exp = list.filter { !it.isIncome }.sumOf { it.amount }
+                val net = inc - exp
+                val converted = SupportedCurrency.convert(net, cur, currency)
+                val rateToMain = SupportedCurrency.convert(1.0, cur, currency)
+                ForeignCurrencyRecord(
+                    currency = cur,
+                    currencyCode = cur.code,
+                    totalIncome = inc,
+                    totalExpense = exp,
+                    netAmount = net,
+                    convertedToMain = converted,
+                    count = list.size,
+                    exchangeRateToMain = rateToMain
+                )
+            }
+            .filter { it.count > 0 }
+            .sortedByDescending { it.convertedToMain }
+
+        val totalForeignHoldingsConverted = foreignRecordsList.sumOf { it.convertedToMain }
 
         // Category breakdown
         val categoryGroups = expenseItems.groupBy { it.category }
@@ -433,9 +521,15 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
 
         val topCat = summaries.firstOrNull()
 
-        // Budgets status - Accurate current month calculation
+        // Budgets status - Accurate current month & today calculation
         val currentMonthExpenses = filterByTimeRange(allExpenses, TimeRange.THIS_MONTH).filter { !it.isIncome }
         val currentMonthTotalSpent = currentMonthExpenses.sumOf { convertAmount(it) }
+
+        val todayExpenses = filterByTimeRange(allExpenses, TimeRange.TODAY).filter { !it.isIncome }
+        val todayTotalSpent = todayExpenses.sumOf { convertAmount(it) }
+
+        val calInstance = java.util.Calendar.getInstance()
+        val daysInCurrentMonth = calInstance.getActualMaximum(java.util.Calendar.DAY_OF_MONTH).coerceAtLeast(1)
 
         val statuses = allBudgets.map { b: Budget ->
             val limit = SupportedCurrency.convert(
@@ -456,6 +550,20 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
             val pct = if (limit > 0) (spent / limit).toFloat() else 0f
             val remaining = (limit - spent).coerceAtLeast(0.0)
 
+            val spentToday = if (b.category.equals("OVERALL", ignoreCase = true)) {
+                todayTotalSpent
+            } else {
+                todayExpenses.filter {
+                    it.category.equals(b.category, ignoreCase = true) ||
+                    it.expenseCategory.name.equals(b.category, ignoreCase = true) ||
+                    com.example.data.CategoryRegistry.getCategoryItem(it.category).key.equals(b.category, ignoreCase = true) ||
+                    com.example.data.CategoryRegistry.getCategoryItem(it.category).displayName.equals(b.category, ignoreCase = true)
+                }.sumOf { convertAmount(it) }
+            }
+            val dailyLimit = if (limit > 0) limit / daysInCurrentMonth else 0.0
+            val dailyPct = if (dailyLimit > 0) (spentToday / dailyLimit).toFloat() else 0f
+            val dailyRemaining = (dailyLimit - spentToday).coerceAtLeast(0.0)
+
             val catDisplayName = if (b.category.equals("OVERALL", ignoreCase = true)) "Overall Budget" else com.example.data.CategoryRegistry.getCategoryItem(b.category).displayName
             BudgetStatus(
                 categoryName = b.category,
@@ -463,7 +571,11 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
                 monthlyLimit = limit,
                 currentSpent = spent,
                 percentUsed = pct,
-                remaining = remaining
+                remaining = remaining,
+                dailyLimit = dailyLimit,
+                todaySpent = spentToday,
+                dailyPercentUsed = dailyPct,
+                dailyRemaining = dailyRemaining
             )
         }
 
@@ -727,10 +839,10 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
             matchesCategory && matchesType && matchesSearch
         }
 
-        // Account starting balance & all-time total balance
+        // Account starting balance & all-time total balance (Main currency only - foreign currencies do not mix into main balance)
         val initialAccBalance = activeAccount?.initialBalance ?: 0.0
-        val allTimeIncome = allExpenses.filter { it.isIncome }.sumOf { convertAmount(it) }
-        val allTimeSpent = allExpenses.filter { !it.isIncome }.sumOf { convertAmount(it) }
+        val allTimeIncome = allExpenses.filter { it.isIncome && it.currency == currency }.sumOf { it.amount }
+        val allTimeSpent = allExpenses.filter { !it.isIncome && it.currency == currency }.sumOf { it.amount }
         val calculatedBalance = (initialAccBalance + allTimeIncome - allTimeSpent).coerceAtLeast(0.0)
 
         ExpenseUiState(
@@ -742,6 +854,9 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
             totalBalance = calculatedBalance,
             totalSpent = totalSpentValue,
             totalIncome = totalIncomeValue,
+            incomeByCurrency = incomeByCurrencyList,
+            foreignCurrencyRecords = foreignRecordsList,
+            totalForeignHoldingsInMainCurrency = totalForeignHoldingsConverted,
             isBalanceHidden = criteria.balanceHidden,
             activeAccount = activeAccount,
             allAccounts = allAccounts,
@@ -759,6 +874,8 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
             dismissedBudgetAlerts = criteria.dismissedAlerts,
             budgetWarningThresholdPercent = criteria.warningThreshold,
             recentBudgetAlertMessage = criteria.recentAlertMsg,
+            overallBudgetPeriod = criteria.overallBudgetPeriod,
+            daysInCurrentMonth = daysInCurrentMonth,
             aiInsights = aiInsightsList,
             financialHealthScore = healthScore,
             selectedTimeRange = criteria.timeRange,
@@ -929,12 +1046,21 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
         _selectedTimeRange.value = timeRange
     }
 
+    fun setOverallBudgetPeriod(period: BudgetPeriod) {
+        _overallBudgetPeriod.value = period
+    }
+
+    fun toggleOverallBudgetPeriod() {
+        _overallBudgetPeriod.value = if (_overallBudgetPeriod.value == BudgetPeriod.MONTHLY) BudgetPeriod.DAILY else BudgetPeriod.MONTHLY
+    }
+
     fun setCategoryFilter(category: ExpenseCategory?) {
         _selectedCategory.value = category
     }
 
     fun setSelectedCurrency(currency: SupportedCurrency) {
         _selectedCurrency.value = currency
+        prefs.edit().putString("pref_currency", currency.code).apply()
     }
 
     fun setDarkMode(isDark: Boolean) {
@@ -1360,6 +1486,14 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
         val now = System.currentTimeMillis()
 
         return when (range) {
+            TimeRange.TODAY -> {
+                cal.set(Calendar.HOUR_OF_DAY, 0)
+                cal.set(Calendar.MINUTE, 0)
+                cal.set(Calendar.SECOND, 0)
+                cal.set(Calendar.MILLISECOND, 0)
+                val start = cal.timeInMillis
+                expenses.filter { it.dateMillis in start..now }
+            }
             TimeRange.THIS_WEEK -> {
                 cal.set(Calendar.DAY_OF_WEEK, cal.firstDayOfWeek)
                 cal.set(Calendar.HOUR_OF_DAY, 0)
@@ -1508,48 +1642,72 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
 
     fun signInWithGoogle(
         context: Context,
-        email: String = "spidymaadhu2@gmail.com",
-        name: String = "Google User"
+        onRequireGoogleLoginPrompt: () -> Unit = {}
     ) {
         viewModelScope.launch {
             _isAuthLoading.value = true
             _authErrorMessage.value = null
 
-            val res = authService.signInWithGoogle(
-                activityContext = context,
-                fallbackEmail = email,
-                fallbackName = name
-            )
+            val res = authService.signInWithGoogle(activityContext = context)
             if (res is com.example.auth.AuthResult.Success) {
-                val user = res.user
-                _authUser.value = user
+                handleAuthSuccess(res.user)
+            } else if (res is com.example.auth.AuthResult.Error) {
                 _isAuthLoading.value = false
-                _isAuthDismissed.value = true
-                prefs.edit().putBoolean("pref_auth_dismissed", true).apply()
-
-                val cleanEmail = user.email ?: email
-                val existing = repository.findByEmail(cleanEmail)
-                if (existing != null) {
-                    repository.switchAccount(existing.id)
-                    _selectedCurrency.value = SupportedCurrency.fromCode(existing.currencyCode)
+                if (res.message == "GOOGLE_SIGN_IN_PROMPT_REQUIRED" || 
+                    res.message.contains("canceled", ignoreCase = true) || 
+                    res.message.contains("unavailable", ignoreCase = true) ||
+                    res.message.contains("credential", ignoreCase = true)) {
+                    // Open Google interactive sign-in / redirect sheet
+                    onRequireGoogleLoginPrompt()
                 } else {
-                    val newAcc = UserAccount(
-                        id = user.uid,
-                        name = user.displayName ?: cleanEmail.substringBefore("@"),
-                        email = cleanEmail,
-                        pin = "1234",
-                        initialBalance = 1000.0,
-                        currencyCode = "USD",
-                        isActive = true
-                    )
-                    repository.createAccount(newAcc)
+                    _authErrorMessage.value = res.message
                 }
-                syncDataWithFirestore(user.uid)
+            }
+        }
+    }
+
+    fun signInWithCustomGoogle(
+        email: String,
+        name: String? = null
+    ) {
+        viewModelScope.launch {
+            _isAuthLoading.value = true
+            _authErrorMessage.value = null
+
+            val res = authService.signInWithCustomGoogleAccount(email, name)
+            if (res is com.example.auth.AuthResult.Success) {
+                handleAuthSuccess(res.user)
             } else if (res is com.example.auth.AuthResult.Error) {
                 _isAuthLoading.value = false
                 _authErrorMessage.value = res.message
             }
         }
+    }
+
+    private suspend fun handleAuthSuccess(user: com.example.auth.AuthUser) {
+        _authUser.value = user
+        _isAuthLoading.value = false
+        _isAuthDismissed.value = true
+        prefs.edit().putBoolean("pref_auth_dismissed", true).apply()
+
+        val cleanEmail = user.email ?: "user@montra.app"
+        val existing = repository.findByEmail(cleanEmail)
+        if (existing != null) {
+            repository.switchAccount(existing.id)
+            _selectedCurrency.value = SupportedCurrency.fromCode(existing.currencyCode)
+        } else {
+            val newAcc = UserAccount(
+                id = user.uid,
+                name = user.displayName ?: cleanEmail.substringBefore("@"),
+                email = cleanEmail,
+                pin = "1234",
+                initialBalance = 1000.0,
+                currencyCode = "USD",
+                isActive = true
+            )
+            repository.createAccount(newAcc)
+        }
+        syncDataWithFirestore(user.uid)
     }
 
     fun syncDataWithFirestore(userId: String) {

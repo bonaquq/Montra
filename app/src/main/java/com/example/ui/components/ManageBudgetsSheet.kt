@@ -1,6 +1,7 @@
 package com.example.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -74,6 +75,8 @@ fun ManageBudgetsSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     // Pre-populate overall limit
+    val daysInMonth = remember { java.util.Calendar.getInstance().getActualMaximum(java.util.Calendar.DAY_OF_MONTH).coerceAtLeast(1) }
+    var isDailyOverall by remember { mutableStateOf(false) }
     val overallLimit = budgetStatuses.firstOrNull { it.categoryName.equals("OVERALL", ignoreCase = true) }?.monthlyLimit ?: 1500.0
     var overallInput by remember { mutableStateOf(String.format(Locale.US, "%.0f", overallLimit)) }
 
@@ -164,8 +167,9 @@ fun ManageBudgetsSheet(
                     .fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Overall Monthly Cap Card
+                // Overall Monthly / Daily Cap Card
                 item {
+                    val currentOverall = budgetStatuses.firstOrNull { it.categoryName.equals("OVERALL", ignoreCase = true) }
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         color = MontraSurface,
@@ -183,21 +187,69 @@ fun ManageBudgetsSheet(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "Overall Monthly Cap",
+                                    text = if (isDailyOverall) "Overall Daily Cap" else "Overall Monthly Cap",
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF818CF8)
                                 )
-                                val currentOverall = budgetStatuses.firstOrNull { it.categoryName.equals("OVERALL", ignoreCase = true) }
-                                if (currentOverall != null) {
-                                    Text(
-                                        text = "Spent: ${FormatUtils.formatCurrency(currentOverall.currentSpent, currency)}",
-                                        fontSize = 12.sp,
-                                        color = MontraTextSecondary
-                                    )
+                                
+                                // Period Toggle Pill
+                                Row(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(20.dp))
+                                        .background(MontraBackground)
+                                        .padding(2.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .background(if (!isDailyOverall) Color(0xFF6366F1) else Color.Transparent)
+                                            .clickable {
+                                                if (isDailyOverall) {
+                                                    val currentDaily = overallInput.toDoubleOrNull() ?: (overallLimit / daysInMonth)
+                                                    overallInput = String.format(Locale.US, "%.0f", currentDaily * daysInMonth)
+                                                    isDailyOverall = false
+                                                }
+                                            }
+                                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                                            .testTag("btn_manage_overall_monthly"),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "Monthly",
+                                            fontSize = 10.sp,
+                                            fontWeight = if (!isDailyOverall) FontWeight.Bold else FontWeight.Medium,
+                                            color = if (!isDailyOverall) Color.White else MontraTextSecondary
+                                        )
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .background(if (isDailyOverall) Color(0xFF6366F1) else Color.Transparent)
+                                            .clickable {
+                                                if (!isDailyOverall) {
+                                                    val currentMonthly = overallInput.toDoubleOrNull() ?: overallLimit
+                                                    overallInput = String.format(Locale.US, "%.0f", currentMonthly / daysInMonth)
+                                                    isDailyOverall = true
+                                                }
+                                            }
+                                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                                            .testTag("btn_manage_overall_daily"),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "Daily",
+                                            fontSize = 10.sp,
+                                            fontWeight = if (isDailyOverall) FontWeight.Bold else FontWeight.Medium,
+                                            color = if (isDailyOverall) Color.White else MontraTextSecondary
+                                        )
+                                    }
                                 }
                             }
-                            Spacer(modifier = Modifier.height(8.dp))
+                            
+                            Spacer(modifier = Modifier.height(10.dp))
+                            
                             OutlinedTextField(
                                 value = overallInput,
                                 onValueChange = { overallInput = AmountInputUtils.sanitizeAmount(it) },
@@ -205,7 +257,7 @@ fun ManageBudgetsSheet(
                                     .fillMaxWidth()
                                     .testTag("budget_overall_input"),
                                 prefix = { Text("${currency.symbol} ", color = MontraTextPrimary, fontWeight = FontWeight.Bold) },
-                                label = { Text("Total Monthly Limit", color = MontraTextSecondary) },
+                                label = { Text(if (isDailyOverall) "Daily Spending Limit" else "Total Monthly Limit", color = MontraTextSecondary) },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                 singleLine = true,
                                 shape = RoundedCornerShape(12.dp),
@@ -216,6 +268,35 @@ fun ManageBudgetsSheet(
                                     unfocusedTextColor = MontraTextPrimary
                                 )
                             )
+
+                            val enteredVal = overallInput.toDoubleOrNull() ?: 0.0
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = if (isDailyOverall) {
+                                        "Daily Budget: ${FormatUtils.formatCurrency(enteredVal, currency)}/day (≈ ${FormatUtils.formatCurrency(enteredVal * daysInMonth, currency)}/mo)"
+                                    } else {
+                                        "Monthly Budget: ${FormatUtils.formatCurrency(enteredVal, currency)} (≈ ${FormatUtils.formatCurrency(if (daysInMonth > 0) enteredVal / daysInMonth else 0.0, currency)}/day)"
+                                    },
+                                    fontSize = 11.sp,
+                                    color = Color(0xFF818CF8)
+                                )
+                                if (currentOverall != null) {
+                                    Text(
+                                        text = if (isDailyOverall) {
+                                            "Today: ${FormatUtils.formatCurrency(currentOverall.todaySpent, currency)}"
+                                        } else {
+                                            "Month: ${FormatUtils.formatCurrency(currentOverall.currentSpent, currency)}"
+                                        },
+                                        fontSize = 11.sp,
+                                        color = MontraTextSecondary
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -312,7 +393,8 @@ fun ManageBudgetsSheet(
             // Save Button
             Button(
                 onClick = {
-                    val overallVal = overallInput.toDoubleOrNull() ?: 1500.0
+                    val rawVal = overallInput.toDoubleOrNull() ?: if (isDailyOverall) 50.0 else 1500.0
+                    val overallVal = if (isDailyOverall) rawVal * daysInMonth else rawVal
                     onSaveBudget("OVERALL", overallVal)
                     allCategories.forEach { cat ->
                         val catVal = categoryInputs[cat.key]?.toDoubleOrNull()

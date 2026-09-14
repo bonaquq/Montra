@@ -62,6 +62,7 @@ fun ExpenseTrackerScreen(
     var isDeveloperConsoleOpen by remember { mutableStateOf(false) }
     var isDeveloperPasscodeDialogOpen by remember { mutableStateOf(false) }
     var selectedExpenseForDetail by remember { mutableStateOf<Expense?>(null) }
+    var isGoogleLoginModalOpen by remember { mutableStateOf(false) }
 
     val openDeveloperFlow = {
         if (uiState.isDeveloperUnlocked) {
@@ -96,7 +97,19 @@ fun ExpenseTrackerScreen(
                 viewModel.continueAsGuest()
             },
             onSignInWithGoogle = {
-                viewModel.signInWithGoogle(context)
+                viewModel.signInWithGoogle(
+                    context = context,
+                    onRequireGoogleLoginPrompt = {
+                        isGoogleLoginModalOpen = true
+                    }
+                )
+            },
+            onSignInWithCustomGoogle = { email, name ->
+                viewModel.signInWithCustomGoogle(email, name)
+            },
+            showGoogleLoginDialogExternally = isGoogleLoginModalOpen,
+            onDismissGoogleLoginDialog = {
+                isGoogleLoginModalOpen = false
             },
             isLoading = uiState.isAuthLoading,
             errorMessage = uiState.authErrorMessage
@@ -107,13 +120,14 @@ fun ExpenseTrackerScreen(
                 isAddExpenseScreenOpen = false
                 viewModel.clearScannedReceipt()
             },
-            onAddExpense = { amount, category, dateMillis, description, isIncome ->
+            onAddExpense = { amount, category, dateMillis, description, isIncome, currencyCode ->
                 viewModel.addExpense(
                     title = description.ifEmpty { category },
                     amount = amount,
                     category = category,
                     dateMillis = dateMillis,
                     note = description,
+                    currencyCode = currencyCode,
                     isIncome = isIncome
                 )
                 isAddExpenseScreenOpen = false
@@ -189,6 +203,9 @@ fun ExpenseTrackerScreen(
                                     },
                                     onManageBudgets = {
                                         isManageBudgetsSheetOpen = true
+                                    },
+                                    onToggleBudgetPeriod = { period ->
+                                        viewModel.setOverallBudgetPeriod(period)
                                     },
                                     onToggleBalanceVisibility = {
                                         viewModel.toggleBalanceVisibility()

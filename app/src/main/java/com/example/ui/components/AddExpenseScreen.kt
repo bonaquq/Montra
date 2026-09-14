@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PhotoLibrary
 import java.io.File
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -113,19 +114,20 @@ enum class AddExpenseTab {
 @Composable
 fun AddExpenseScreen(
     onBack: () -> Unit,
-    onAddExpense: (amount: Double, category: String, dateMillis: Long, description: String, isIncome: Boolean) -> Unit,
+    onAddExpense: (amount: Double, category: String, dateMillis: Long, description: String, isIncome: Boolean, currencyCode: String) -> Unit,
     onSaveBudget: ((category: String, limit: Double) -> Unit)? = null,
     budgetStatuses: List<BudgetStatus> = emptyList(),
     onScanReceipt: ((Uri) -> Unit)? = null,
     isScanningReceipt: Boolean = false,
     scannedReceiptResult: ParsedReceiptData? = null,
     onClearScannedReceipt: (() -> Unit)? = null,
-    selectedCurrency: SupportedCurrency = SupportedCurrency.USD,
+    selectedCurrency: SupportedCurrency = SupportedCurrency.MVR,
     isDeveloperMode: Boolean = false,
     initialTab: AddExpenseTab = AddExpenseTab.EXPENSE,
     modifier: Modifier = Modifier
 ) {
     var currentTab by remember { mutableStateOf(initialTab) }
+    var incomeCurrency by remember { mutableStateOf(SupportedCurrency.MVR) }
     var amountText by remember { mutableStateOf("") }
     var selectedCategoryKey by remember { mutableStateOf(ExpenseCategory.FOOD.name) }
     val selectedCategoryItem = CategoryRegistry.getCategoryItem(selectedCategoryKey)
@@ -139,6 +141,8 @@ fun AddExpenseScreen(
 
     // Budget Tab specific state
     var isOverallBudget by remember { mutableStateOf(false) }
+    var isDailyBudget by remember { mutableStateOf(false) }
+    val daysInMonth = remember { java.util.Calendar.getInstance().getActualMaximum(java.util.Calendar.DAY_OF_MONTH) }
     var budgetCategoryKey by remember { mutableStateOf(ExpenseCategory.FOOD.name) }
     var budgetAmountText by remember { mutableStateOf("") }
     var budgetSuccessMessage by remember { mutableStateOf<String?>(null) }
@@ -213,7 +217,7 @@ fun AddExpenseScreen(
             if (data.amount > 0.0) {
                 amountText = String.format(java.util.Locale.US, "%.2f", data.amount)
             }
-            if (data.merchantOrTitle.isNotBlank()) {
+            if (data.merchantOrTitle.isNotBlank() && data.merchantOrTitle != "Scanned Document") {
                 description = data.merchantOrTitle
             }
             if (data.dateMillis > 0L) {
@@ -222,6 +226,9 @@ fun AddExpenseScreen(
             if (data.isCreditOrIncome) {
                 isIncome = true
                 currentTab = AddExpenseTab.INCOME
+                if (data.currencyCode.isNotBlank()) {
+                    incomeCurrency = SupportedCurrency.fromCode(data.currencyCode)
+                }
                 selectedCategoryKey = if (data.categoryHint.equals("TRANSFER", ignoreCase = true)) {
                     "TRANSFER"
                 } else {
@@ -233,7 +240,11 @@ fun AddExpenseScreen(
                 val resolvedItem = CategoryRegistry.getCategoryItem(data.categoryHint)
                 selectedCategoryKey = resolvedItem.name
             }
-            scanNotice = "Auto-extracted: ${data.merchantOrTitle} (${data.categoryHint}) - ${selectedCurrency.symbol}${String.format(java.util.Locale.US, "%.2f", data.amount)}"
+            scanNotice = if (data.amount > 0.0) {
+                "Auto-extracted: ${data.merchantOrTitle} • ${selectedCurrency.symbol}${String.format(java.util.Locale.US, "%.2f", data.amount)}"
+            } else {
+                "Scanned: ${data.merchantOrTitle}"
+            }
         }
     }
 
@@ -268,7 +279,7 @@ fun AddExpenseScreen(
                 text = when (currentTab) {
                     AddExpenseTab.EXPENSE -> "Add Expense"
                     AddExpenseTab.INCOME -> "Add Income"
-                    AddExpenseTab.BUDGET -> "Add Monthly Budget"
+                    AddExpenseTab.BUDGET -> "Add Budget"
                 },
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
@@ -477,7 +488,11 @@ fun AddExpenseScreen(
                                 isOverallBudget = true
                                 val existing = budgetStatuses.firstOrNull { it.categoryName == "OVERALL" }
                                 if (existing != null && existing.monthlyLimit > 0) {
-                                    budgetAmountText = String.format(java.util.Locale.US, "%.0f", existing.monthlyLimit)
+                                    budgetAmountText = if (isDailyBudget) {
+                                        String.format(java.util.Locale.US, "%.1f", existing.monthlyLimit / daysInMonth)
+                                    } else {
+                                        String.format(java.util.Locale.US, "%.0f", existing.monthlyLimit)
+                                    }
                                 }
                             }
                             .padding(vertical = 10.dp)
@@ -535,6 +550,81 @@ fun AddExpenseScreen(
                                 fontSize = 13.sp,
                                 fontWeight = if (!isOverallBudget) FontWeight.Bold else FontWeight.Medium,
                                 color = if (!isOverallBudget) Color(0xFF818CF8) else MontraTextSecondary
+                            )
+                        }
+                    }
+                }
+
+                // Daily / Monthly Toggle when Overall Cap is selected
+                if (isOverallBudget) {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Text(
+                        text = "Budget Period",
+                        fontSize = 13.sp,
+                        color = MontraTextSecondary,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MontraSurface)
+                            .border(1.dp, MontraBorder, RoundedCornerShape(12.dp))
+                            .padding(3.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        // Monthly option
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(9.dp))
+                                .background(if (!isDailyBudget) Color(0xFF6366F1) else Color.Transparent)
+                                .clickable {
+                                    if (isDailyBudget) {
+                                        val curr = budgetAmountText.toDoubleOrNull()
+                                        if (curr != null && curr > 0) {
+                                            budgetAmountText = String.format(java.util.Locale.US, "%.0f", curr * daysInMonth)
+                                        }
+                                        isDailyBudget = false
+                                    }
+                                }
+                                .padding(vertical = 8.dp)
+                                .testTag("btn_overall_period_monthly"),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Monthly Budget",
+                                fontSize = 12.sp,
+                                fontWeight = if (!isDailyBudget) FontWeight.Bold else FontWeight.Medium,
+                                color = if (!isDailyBudget) Color.White else MontraTextSecondary
+                            )
+                        }
+
+                        // Daily option
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(9.dp))
+                                .background(if (isDailyBudget) Color(0xFF6366F1) else Color.Transparent)
+                                .clickable {
+                                    if (!isDailyBudget) {
+                                        val curr = budgetAmountText.toDoubleOrNull()
+                                        if (curr != null && curr > 0) {
+                                            budgetAmountText = String.format(java.util.Locale.US, "%.1f", curr / daysInMonth)
+                                        }
+                                        isDailyBudget = true
+                                    }
+                                }
+                                .padding(vertical = 8.dp)
+                                .testTag("btn_overall_period_daily"),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Daily Budget",
+                                fontSize = 12.sp,
+                                fontWeight = if (isDailyBudget) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isDailyBudget) Color.White else MontraTextSecondary
                             )
                         }
                     }
@@ -603,9 +693,9 @@ fun AddExpenseScreen(
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                // Monthly Limit Field
+                // Limit Field
                 Text(
-                    text = "Monthly Limit Target",
+                    text = if (isOverallBudget && isDailyBudget) "Daily Limit Target" else "Monthly Limit Target",
                     fontSize = 13.sp,
                     color = MontraTextSecondary,
                     fontWeight = FontWeight.Medium
@@ -656,13 +746,35 @@ fun AddExpenseScreen(
                     }
                 }
 
+                val enteredBudgetVal = budgetAmountText.toDoubleOrNull() ?: 0.0
+                if (enteredBudgetVal > 0) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = if (isOverallBudget && isDailyBudget) {
+                            "Daily Budget: ${selectedCurrency.symbol}${String.format(java.util.Locale.US, "%.2f", enteredBudgetVal)}/day (≈ ${selectedCurrency.symbol}${String.format(java.util.Locale.US, "%.2f", enteredBudgetVal * daysInMonth)} total monthly)"
+                        } else if (isOverallBudget) {
+                            "Monthly Budget: ${selectedCurrency.symbol}${String.format(java.util.Locale.US, "%.2f", enteredBudgetVal)} (≈ ${selectedCurrency.symbol}${String.format(java.util.Locale.US, "%.2f", enteredBudgetVal / daysInMonth)}/day daily allowance)"
+                        } else {
+                            "Category Budget: ${selectedCurrency.symbol}${String.format(java.util.Locale.US, "%.2f", enteredBudgetVal)}/month (≈ ${selectedCurrency.symbol}${String.format(java.util.Locale.US, "%.2f", enteredBudgetVal / daysInMonth)}/day)"
+                        },
+                        fontSize = 12.sp,
+                        color = Color(0xFF818CF8),
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+
                 // Quick Preset Chips
                 Spacer(modifier = Modifier.height(12.dp))
+                val quickPresets = if (isOverallBudget && isDailyBudget) {
+                    listOf(15.0, 30.0, 50.0, 100.0)
+                } else {
+                    listOf(100.0, 250.0, 500.0, 1000.0)
+                }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    listOf(100.0, 250.0, 500.0, 1000.0).forEach { preset ->
+                    quickPresets.forEach { preset ->
                         Box(
                             modifier = Modifier
                                 .weight(1f)
@@ -714,15 +826,27 @@ fun AddExpenseScreen(
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Text(
-                                    text = if (isOverallBudget) "Overall Monthly Status" else "${CategoryRegistry.getCategoryItem(budgetCategoryKey).displayName} Status",
+                                    text = if (isOverallBudget) {
+                                        if (isDailyBudget) "Overall Daily Status" else "Overall Monthly Status"
+                                    } else {
+                                        "${CategoryRegistry.getCategoryItem(budgetCategoryKey).displayName} Status"
+                                    },
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MontraTextPrimary
                                 )
                             }
                             if (currentStatus != null && currentStatus.monthlyLimit > 0) {
-                                val isExceeded = currentStatus.percentUsed >= 100f
-                                val isApproaching = currentStatus.percentUsed >= 80f && currentStatus.percentUsed < 100f
+                                val isExceeded = if (isOverallBudget && isDailyBudget) {
+                                    currentStatus.todaySpent > currentStatus.dailyLimit && currentStatus.dailyLimit > 0
+                                } else {
+                                    currentStatus.percentUsed >= 100f
+                                }
+                                val isApproaching = if (isOverallBudget && isDailyBudget) {
+                                    currentStatus.dailyLimit > 0 && (currentStatus.todaySpent / currentStatus.dailyLimit) >= 0.8f && !isExceeded
+                                } else {
+                                    currentStatus.percentUsed >= 80f && currentStatus.percentUsed < 100f
+                                }
                                 val statusColor = when {
                                     isExceeded -> Color(0xFFF87171)
                                     isApproaching -> Color(0xFFFBBF24)
@@ -749,57 +873,112 @@ fun AddExpenseScreen(
                         }
 
                         if (currentStatus != null && currentStatus.monthlyLimit > 0) {
-                            val isExceeded = currentStatus.percentUsed >= 100f
-                            val isApproaching = currentStatus.percentUsed >= 80f && currentStatus.percentUsed < 100f
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Column {
-                                    Text("Spent this Month", fontSize = 11.sp, color = MontraTextSecondary)
-                                    Text(
-                                        "${selectedCurrency.symbol}${String.format(java.util.Locale.US, "%.2f", currentStatus.currentSpent)}",
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MontraTextPrimary
-                                    )
+                            if (isOverallBudget && isDailyBudget) {
+                                val dailyExceeded = currentStatus.todaySpent > currentStatus.dailyLimit && currentStatus.dailyLimit > 0
+                                val dailyApproaching = currentStatus.dailyLimit > 0 && (currentStatus.todaySpent / currentStatus.dailyLimit) >= 0.8f && !dailyExceeded
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column {
+                                        Text("Spent Today", fontSize = 11.sp, color = MontraTextSecondary)
+                                        Text(
+                                            "${selectedCurrency.symbol}${String.format(java.util.Locale.US, "%.2f", currentStatus.todaySpent)}",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MontraTextPrimary
+                                        )
+                                    }
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text("Daily Limit", fontSize = 11.sp, color = MontraTextSecondary)
+                                        Text(
+                                            "${selectedCurrency.symbol}${String.format(java.util.Locale.US, "%.2f", currentStatus.dailyLimit)}",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF818CF8)
+                                        )
+                                    }
+                                    Column(horizontalAlignment = Alignment.End) {
+                                        Text("Daily Remaining", fontSize = 11.sp, color = MontraTextSecondary)
+                                        Text(
+                                            "${selectedCurrency.symbol}${String.format(java.util.Locale.US, "%.2f", currentStatus.dailyRemaining)}",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (currentStatus.dailyRemaining < 0) Color(0xFFF87171) else Color(0xFF10B981)
+                                        )
+                                    }
                                 }
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text("Current Limit", fontSize = 11.sp, color = MontraTextSecondary)
-                                    Text(
-                                        "${selectedCurrency.symbol}${String.format(java.util.Locale.US, "%.2f", currentStatus.monthlyLimit)}",
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF818CF8)
-                                    )
-                                }
-                                Column(horizontalAlignment = Alignment.End) {
-                                    Text("Remaining", fontSize = 11.sp, color = MontraTextSecondary)
-                                    Text(
-                                        "${selectedCurrency.symbol}${String.format(java.util.Locale.US, "%.2f", currentStatus.remaining)}",
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (currentStatus.remaining < 0) Color(0xFFF87171) else Color(0xFF10B981)
-                                    )
-                                }
-                            }
 
-                            LinearProgressIndicator(
-                                progress = { (currentStatus.percentUsed / 100f).coerceIn(0f, 1f) },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(6.dp)
-                                    .clip(RoundedCornerShape(3.dp)),
-                                color = when {
-                                    isExceeded -> Color(0xFFF87171)
-                                    isApproaching -> Color(0xFFFBBF24)
-                                    else -> Color(0xFF10B981)
-                                },
-                                trackColor = MontraBorder
-                            )
+                                val dailyProgress = if (currentStatus.dailyLimit > 0) {
+                                    (currentStatus.todaySpent / currentStatus.dailyLimit).toFloat().coerceIn(0f, 1f)
+                                } else 0f
+
+                                LinearProgressIndicator(
+                                    progress = { dailyProgress },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(6.dp)
+                                        .clip(RoundedCornerShape(3.dp)),
+                                    color = when {
+                                        dailyExceeded -> Color(0xFFF87171)
+                                        dailyApproaching -> Color(0xFFFBBF24)
+                                        else -> Color(0xFF10B981)
+                                    },
+                                    trackColor = MontraBorder
+                                )
+                            } else {
+                                val isExceeded = currentStatus.percentUsed >= 100f
+                                val isApproaching = currentStatus.percentUsed >= 80f && currentStatus.percentUsed < 100f
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column {
+                                        Text("Spent this Month", fontSize = 11.sp, color = MontraTextSecondary)
+                                        Text(
+                                            "${selectedCurrency.symbol}${String.format(java.util.Locale.US, "%.2f", currentStatus.currentSpent)}",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MontraTextPrimary
+                                        )
+                                    }
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text("Current Limit", fontSize = 11.sp, color = MontraTextSecondary)
+                                        Text(
+                                            "${selectedCurrency.symbol}${String.format(java.util.Locale.US, "%.2f", currentStatus.monthlyLimit)}",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF818CF8)
+                                        )
+                                    }
+                                    Column(horizontalAlignment = Alignment.End) {
+                                        Text("Remaining", fontSize = 11.sp, color = MontraTextSecondary)
+                                        Text(
+                                            "${selectedCurrency.symbol}${String.format(java.util.Locale.US, "%.2f", currentStatus.remaining)}",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (currentStatus.remaining < 0) Color(0xFFF87171) else Color(0xFF10B981)
+                                        )
+                                    }
+                                }
+
+                                LinearProgressIndicator(
+                                    progress = { (currentStatus.percentUsed / 100f).coerceIn(0f, 1f) },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(6.dp)
+                                        .clip(RoundedCornerShape(3.dp)),
+                                    color = when {
+                                        isExceeded -> Color(0xFFF87171)
+                                        isApproaching -> Color(0xFFFBBF24)
+                                        else -> Color(0xFF10B981)
+                                    },
+                                    trackColor = MontraBorder
+                                )
+                            }
                         } else {
                             Text(
-                                text = "No budget configured yet for this target. Setting a monthly limit will activate tracking, progress bars, and smart warnings before you overspend.",
+                                text = "No budget configured yet for this target. Setting a limit will activate tracking, progress bars, and smart warnings before you overspend.",
                                 fontSize = 12.sp,
                                 color = MontraTextSecondary,
                                 lineHeight = 17.sp
@@ -1144,6 +1323,85 @@ fun AddExpenseScreen(
                 }
             }
 
+            val isCurrentlyIncomeSection = currentTab == AddExpenseTab.INCOME || isIncome ||
+                    selectedCategoryKey.equals(ExpenseCategory.INCOME.name, ignoreCase = true) ||
+                    selectedCategoryKey.equals("SALARY", ignoreCase = true)
+            val currentActiveCurrency = if (isCurrentlyIncomeSection) incomeCurrency else selectedCurrency
+
+            // Income Currency Selector (Multi-currency switcher: USD, EUR, MVR, GBP, JPY, INR, CAD, AUD)
+            if (isCurrentlyIncomeSection) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Income Currency",
+                        fontSize = 13.sp,
+                        color = MontraTextSecondary,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "${incomeCurrency.displayName} (${incomeCurrency.symbol})",
+                        fontSize = 12.sp,
+                        color = Color(0xFF34D399),
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(MontraSurface)
+                        .border(1.dp, MontraBorder, RoundedCornerShape(14.dp))
+                        .horizontalScroll(rememberScrollState())
+                        .padding(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    val allIncomeCurrencies = listOf(
+                        Triple(SupportedCurrency.MVR, "MVR (Rf)", "🇲🇻"),
+                        Triple(SupportedCurrency.USD, "USD ($)", "🇺🇸"),
+                        Triple(SupportedCurrency.EUR, "EUR (€)", "🇪🇺"),
+                        Triple(SupportedCurrency.GBP, "GBP (£)", "🇬🇧"),
+                        Triple(SupportedCurrency.JPY, "JPY (¥)", "🇯🇵"),
+                        Triple(SupportedCurrency.INR, "INR (₹)", "🇮🇳"),
+                        Triple(SupportedCurrency.CAD, "CAD (CA$)", "🇨🇦"),
+                        Triple(SupportedCurrency.AUD, "AUD (A$)", "🇦🇺")
+                    )
+                    allIncomeCurrencies.forEach { (curr, label, flag) ->
+                        val isSelected = incomeCurrency == curr
+                        Surface(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable { incomeCurrency = curr }
+                                .testTag("btn_income_currency_${curr.code.lowercase()}"),
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isSelected) Color(0xFF059669) else Color(0xFF1E293B),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (isSelected) Color(0xFF34D399) else MontraBorder
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(text = flag, fontSize = 14.sp)
+                                Text(
+                                    text = label,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isSelected) Color.White else MontraTextSecondary
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
             // Amount Field
             Text(
                 text = "Amount",
@@ -1162,7 +1420,7 @@ fun AddExpenseScreen(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "${selectedCurrency.symbol} ",
+                        text = "${currentActiveCurrency.symbol} ",
                         fontSize = 20.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MontraTextSecondary
@@ -1517,15 +1775,20 @@ fun AddExpenseScreen(
                 val isUpdate = currentStatus != null && currentStatus.monthlyLimit > 0
                 Button(
                     onClick = {
-                        val limit = budgetAmountText.toDoubleOrNull()
-                        if (limit == null || limit <= 0.0) {
-                            errorMessage = "Please enter a valid monthly limit amount"
+                        val inputVal = budgetAmountText.toDoubleOrNull()
+                        if (inputVal == null || inputVal <= 0.0) {
+                            errorMessage = "Please enter a valid budget limit amount"
                             return@Button
                         }
                         val targetKey = if (isOverallBudget) "OVERALL" else budgetCategoryKey
-                        val targetDisplayName = if (isOverallBudget) "Overall Monthly Budget" else CategoryRegistry.getCategoryItem(budgetCategoryKey).displayName
-                        onSaveBudget?.invoke(targetKey, limit)
-                        budgetSuccessMessage = "Saved ${selectedCurrency.symbol}${String.format(java.util.Locale.US, "%.2f", limit)} monthly limit for $targetDisplayName!"
+                        val finalMonthlyLimit = if (isOverallBudget && isDailyBudget) inputVal * daysInMonth else inputVal
+                        val targetDisplayName = if (isOverallBudget) {
+                            if (isDailyBudget) "Overall Daily Budget (${selectedCurrency.symbol}${String.format(java.util.Locale.US, "%.2f", inputVal)}/day)" else "Overall Monthly Budget"
+                        } else {
+                            CategoryRegistry.getCategoryItem(budgetCategoryKey).displayName
+                        }
+                        onSaveBudget?.invoke(targetKey, finalMonthlyLimit)
+                        budgetSuccessMessage = "Saved $targetDisplayName successfully!"
                         errorMessage = null
                     },
                     colors = ButtonDefaults.buttonColors(
@@ -1545,7 +1808,7 @@ fun AddExpenseScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (isUpdate) "Update Monthly Budget" else "Save Monthly Budget",
+                        text = if (isUpdate) "Update Budget" else "Add Budget",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -1573,7 +1836,8 @@ fun AddExpenseScreen(
                             selectedCategoryKey,
                             dateMillis,
                             description.trim(),
-                            isCurrentlyIncome
+                            isCurrentlyIncome,
+                            if (isCurrentlyIncome) incomeCurrency.code else selectedCurrency.code
                         )
                     },
                     colors = ButtonDefaults.buttonColors(

@@ -55,6 +55,14 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.filled.AlternateEmail
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.example.data.SupportedCurrency
 import com.example.ui.theme.MontraBackground
 import com.example.ui.theme.MontraBorder
@@ -72,6 +80,9 @@ fun AuthScreen(
     onSignUp: (email: String, pass: String, name: String, initialBalance: Double, currency: SupportedCurrency) -> Unit,
     onContinueAsGuest: () -> Unit,
     onSignInWithGoogle: (() -> Unit)? = null,
+    onSignInWithCustomGoogle: ((email: String, name: String?) -> Unit)? = null,
+    showGoogleLoginDialogExternally: Boolean = false,
+    onDismissGoogleLoginDialog: () -> Unit = {},
     isLoading: Boolean = false,
     errorMessage: String? = null,
     modifier: Modifier = Modifier
@@ -81,11 +92,27 @@ fun AuthScreen(
     var password by remember { mutableStateOf("") }
     var name by remember { mutableStateOf("") }
     var initialBalanceText by remember { mutableStateOf("0") }
-    var selectedCurrency by remember { mutableStateOf(SupportedCurrency.USD) }
+    var selectedCurrency by remember { mutableStateOf(SupportedCurrency.MVR) }
     var isPasswordVisible by remember { mutableStateOf(false) }
     var localError by remember { mutableStateOf<String?>(null) }
+    var showInternalGoogleDialog by remember { mutableStateOf(false) }
 
     val displayError = localError ?: errorMessage
+    val showGoogleDialog = showInternalGoogleDialog || showGoogleLoginDialogExternally
+
+    if (showGoogleDialog && onSignInWithCustomGoogle != null) {
+        GoogleAccountSignInDialog(
+            onDismiss = {
+                showInternalGoogleDialog = false
+                onDismissGoogleLoginDialog()
+            },
+            onConfirm = { googleEmail, googleName ->
+                showInternalGoogleDialog = false
+                onDismissGoogleLoginDialog()
+                onSignInWithCustomGoogle(googleEmail, googleName)
+            }
+        )
+    }
 
     Column(
         modifier = modifier
@@ -297,7 +324,7 @@ fun AuthScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    val quickCurrencies = listOf(SupportedCurrency.USD, SupportedCurrency.EUR, SupportedCurrency.MVR, SupportedCurrency.GBP)
+                    val quickCurrencies = listOf(SupportedCurrency.MVR, SupportedCurrency.USD, SupportedCurrency.EUR, SupportedCurrency.GBP)
                     quickCurrencies.forEach { cur ->
                         val isCurSelected = selectedCurrency == cur
                         Box(
@@ -505,6 +532,228 @@ fun GoogleIconBadge(modifier: Modifier = Modifier) {
             end = androidx.compose.ui.geometry.Offset(w - strokeWidth / 3f, cy),
             strokeWidth = strokeWidth
         )
+    }
+}
+
+@Composable
+fun GoogleAccountSignInDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (email: String, name: String?) -> Unit
+) {
+    val context = LocalContext.current
+    var enteredEmail by remember { mutableStateOf("") }
+    var enteredName by remember { mutableStateOf("") }
+    var validationError by remember { mutableStateOf<String?>(null) }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.65f))
+                .padding(horizontal = 20.dp, vertical = 24.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(24.dp)),
+                color = MontraSurfaceElevated,
+                border = androidx.compose.foundation.BorderStroke(1.dp, MontraBorder),
+                tonalElevation = 8.dp
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp)
+                        .verticalScroll(rememberScrollState()),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Header Row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            GoogleIconBadge(modifier = Modifier.size(24.dp))
+                            Text(
+                                text = "Sign in with Google",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MontraTextPrimary
+                            )
+                        }
+                        IconButton(
+                            onClick = onDismiss,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Close,
+                                contentDescription = "Close",
+                                tint = MontraTextMuted,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Text(
+                        text = "Sign in to securely access your personal expense tracker and sync your financial transactions.",
+                        fontSize = 13.sp,
+                        color = MontraTextSecondary,
+                        lineHeight = 18.sp,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    // Redirect to Browser Button
+                    Button(
+                        onClick = {
+                            try {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://accounts.google.com/ServiceLogin"))
+                                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                // Fallback
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF1E293B),
+                            contentColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(14.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF334155)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = Color(0xFF60A5FA)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Redirect to Google Login (Browser)",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(18.dp))
+
+                    // Divider
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(modifier = Modifier.weight(1f).height(1.dp).background(MontraBorder))
+                        Text(
+                            text = "  or enter your Google Account  ",
+                            fontSize = 11.sp,
+                            color = MontraTextMuted,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Box(modifier = Modifier.weight(1f).height(1.dp).background(MontraBorder))
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Input for Google email
+                    MontraAuthInputField(
+                        label = "Google Account Email",
+                        value = enteredEmail,
+                        onValueChange = {
+                            enteredEmail = it
+                            validationError = null
+                        },
+                        icon = Icons.Filled.AlternateEmail,
+                        placeholder = "e.g. name@gmail.com",
+                        keyboardType = KeyboardType.Email,
+                        testTag = "input_google_email"
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Input for Name
+                    MontraAuthInputField(
+                        label = "Full Name (Optional)",
+                        value = enteredName,
+                        onValueChange = { enteredName = it },
+                        icon = Icons.Filled.Person,
+                        placeholder = "e.g. Alex Smith",
+                        keyboardType = KeyboardType.Text,
+                        testTag = "input_google_name"
+                    )
+
+                    if (validationError != null) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = validationError ?: "",
+                            fontSize = 12.sp,
+                            color = Color(0xFFEF4444),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(22.dp))
+
+                    // Action buttons
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = onDismiss,
+                            shape = RoundedCornerShape(14.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, MontraBorder),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MontraTextSecondary),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp)
+                        ) {
+                            Text("Cancel", fontSize = 14.sp)
+                        }
+
+                        Button(
+                            onClick = {
+                                val clean = enteredEmail.trim()
+                                if (clean.isBlank() || !clean.contains("@")) {
+                                    validationError = "Please enter a valid Google email address"
+                                    return@Button
+                                }
+                                onConfirm(clean, enteredName.trim().ifBlank { null })
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF2563EB),
+                                contentColor = Color.White
+                            ),
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier
+                                .weight(1.5f)
+                                .height(48.dp)
+                        ) {
+                            Text("Sign In with Google", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
