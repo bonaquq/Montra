@@ -270,9 +270,6 @@ fun ExpenseTrackerScreen(
                                     },
                                     onClearAllTransactions = {
                                         viewModel.deleteAllTransactions()
-                                    },
-                                    onOpenDeveloperOptions = {
-                                        openDeveloperFlow()
                                     }
                                 )
                             }
@@ -307,13 +304,14 @@ fun ExpenseTrackerScreen(
     if (isCreateAccountModalOpen) {
         CreateAccountModal(
             onDismiss = { isCreateAccountModalOpen = false },
-            onCreateAccount = { name, email, pin, balance, currency ->
+            onCreateAccount = { name, email, pin, balance, currency, profilePictureUri ->
                 viewModel.createAccount(
                     name = name,
                     email = email,
                     pin = pin,
                     initialBalance = balance,
-                    currency = currency
+                    currency = currency,
+                    profilePictureUri = profilePictureUri
                 )
                 isCreateAccountModalOpen = false
             }
@@ -337,6 +335,12 @@ fun ExpenseTrackerScreen(
             onLogout = {
                 viewModel.logoutAndShowAuth()
                 isAccountManageModalOpen = false
+            },
+            onUpdateProfilePicture = { uriString ->
+                viewModel.updateProfilePicture(uriString)
+            },
+            onUpdateAccountProfile = { name, email, pfp ->
+                viewModel.updateAccountProfile(name, email, pfp)
             },
             onOpenDeveloperOptions = {
                 isAccountManageModalOpen = false

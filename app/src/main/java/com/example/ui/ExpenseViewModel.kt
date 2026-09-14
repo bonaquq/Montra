@@ -872,7 +872,8 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
         email: String,
         pin: String,
         initialBalance: Double,
-        currency: String
+        currency: String,
+        profilePictureUri: String? = null
     ) {
         viewModelScope.launch {
             val accountId = "acc_" + System.currentTimeMillis()
@@ -883,10 +884,14 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
                 pin = pin.trim(),
                 initialBalance = initialBalance,
                 currencyCode = currency,
+                profilePictureUri = profilePictureUri,
                 isActive = true
             )
             repository.createAccount(newAccount)
             _selectedCurrency.value = SupportedCurrency.fromCode(currency)
+            _authUser.value?.let { user ->
+                firestoreService.saveUserAccount(user.uid, newAccount)
+            }
         }
     }
 
@@ -905,6 +910,52 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
     fun updateAccount(account: UserAccount) {
         viewModelScope.launch {
             repository.updateAccount(account)
+            _authUser.value?.let { user ->
+                firestoreService.saveUserAccount(user.uid, account)
+            }
+        }
+    }
+
+    fun updateProfilePicture(uriString: String?) {
+        viewModelScope.launch {
+            val currentAcc = repository.getActiveAccountOnce()
+            if (currentAcc != null) {
+                val updated = currentAcc.copy(profilePictureUri = uriString)
+                repository.updateAccount(updated)
+                _authUser.value?.let { user ->
+                    firestoreService.saveUserAccount(user.uid, updated)
+                }
+            } else {
+                val defaultAcc = UserAccount(
+                    id = "acc_user_" + System.currentTimeMillis(),
+                    name = "Personal Account",
+                    email = _authUser.value?.email ?: "user@montra.app",
+                    currencyCode = _selectedCurrency.value.code,
+                    profilePictureUri = uriString,
+                    isActive = true
+                )
+                repository.createAccount(defaultAcc)
+                _authUser.value?.let { user ->
+                    firestoreService.saveUserAccount(user.uid, defaultAcc)
+                }
+            }
+        }
+    }
+
+    fun updateAccountProfile(name: String, email: String, profilePictureUri: String?) {
+        viewModelScope.launch {
+            val currentAcc = repository.getActiveAccountOnce()
+            if (currentAcc != null) {
+                val updated = currentAcc.copy(
+                    name = name.trim().ifEmpty { currentAcc.name },
+                    email = email.trim().ifEmpty { currentAcc.email },
+                    profilePictureUri = profilePictureUri ?: currentAcc.profilePictureUri
+                )
+                repository.updateAccount(updated)
+                _authUser.value?.let { user ->
+                    firestoreService.saveUserAccount(user.uid, updated)
+                }
+            }
         }
     }
 

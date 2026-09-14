@@ -43,6 +43,7 @@ class FirestoreService(private val context: Context) {
                 "email" to account.email,
                 "currencyCode" to account.currencyCode,
                 "initialBalance" to account.initialBalance,
+                "profilePictureUri" to (account.profilePictureUri ?: ""),
                 "updatedAt" to System.currentTimeMillis()
             )
             firestore.collection("users")

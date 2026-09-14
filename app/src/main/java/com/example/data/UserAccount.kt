@@ -12,6 +12,7 @@ data class UserAccount(
     val initialBalance: Double = 0.0,
     val currencyCode: String = "USD",
     val isActive: Boolean = true,
+    val profilePictureUri: String? = null,
     val createdAt: Long = System.currentTimeMillis()
 ) {
     val initials: String

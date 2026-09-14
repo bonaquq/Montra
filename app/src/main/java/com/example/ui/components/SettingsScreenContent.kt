@@ -98,7 +98,6 @@ fun SettingsScreenContent(
     onToggleBiometric: (Boolean) -> Unit = {},
     onLockAppNow: () -> Unit = {},
     onClearAllTransactions: () -> Unit = {},
-    onOpenDeveloperOptions: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -167,29 +166,11 @@ fun SettingsScreenContent(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(CircleShape)
-                                .background(MontraSurfaceElevated),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (account != null) {
-                                Text(
-                                    text = account.initials,
-                                    fontSize = 17.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MontraTextPrimary
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Filled.Person,
-                                    contentDescription = null,
-                                    tint = MontraTextPrimary,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                        }
+                        UserAvatar(
+                            account = account,
+                            size = 48.dp,
+                            fontSize = 17.sp
+                        )
 
                         Column {
                             Text(
@@ -399,15 +380,6 @@ fun SettingsScreenContent(
                     value = null,
                     onClick = { isAboutDialogOpen = true },
                     modifier = Modifier.testTag("item_settings_about")
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-
-                SettingsItemRow(
-                    icon = Icons.Filled.Terminal,
-                    title = "Developer Options",
-                    value = if (uiState.isDeveloperUnlocked) "Unlocked" else "Passcode Required",
-                    onClick = onOpenDeveloperOptions,
-                    modifier = Modifier.testTag("item_settings_developer_options")
                 )
                 Spacer(modifier = Modifier.height(24.dp))
             }

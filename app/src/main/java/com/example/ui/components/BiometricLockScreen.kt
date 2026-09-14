@@ -202,18 +202,17 @@ fun BiometricLockScreen(
                 Spacer(modifier = Modifier.height(14.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier
                         .clip(RoundedCornerShape(20.dp))
                         .background(MontraSurface)
                         .border(1.dp, MontraBorder, RoundedCornerShape(20.dp))
-                        .padding(horizontal = 14.dp, vertical = 6.dp)
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.Lock,
-                        contentDescription = null,
-                        tint = Color(0xFF2563EB),
-                        modifier = Modifier.size(13.dp)
+                    UserAvatar(
+                        account = uiState.activeAccount,
+                        size = 22.dp,
+                        fontSize = 10.sp
                     )
                     Text(
                         text = accountName,
