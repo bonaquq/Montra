@@ -114,7 +114,7 @@ object ImageCropUtils {
         rotationDegrees: Float,
         viewportWidth: Float,
         viewportHeight: Float,
-        cropRadiusOrSize: Float,
+        cropDiameter: Float,
         outputDimension: Int = 512
     ): String? {
         return try {
@@ -129,28 +129,26 @@ object ImageCropUtils {
             )
             val effectiveScale = baseScale * cropScale
 
-            // Viewport center
-            val viewCenterX = viewportWidth / 2f
-            val viewCenterY = viewportHeight / 2f
-
             // Transform matrix for source image to destination canvas
             val matrix = Matrix()
 
             // 1. Center source bitmap at origin
             matrix.postTranslate(-sourceBitmap.width / 2f, -sourceBitmap.height / 2f)
 
-            // 2. Apply user rotation
-            matrix.postRotate(rotationDegrees)
-
-            // 3. Apply scale
+            // 2. Apply scale
             matrix.postScale(effectiveScale, effectiveScale)
 
-            // 4. Translate by user pan offset
+            // 3. Apply user rotation
+            matrix.postRotate(rotationDegrees)
+
+            // 4. Translate by user pan offset on screen
             matrix.postTranslate(offsetX, offsetY)
 
-            // 5. Map viewport coordinates to output canvas coordinates
-            val canvasScale = outputDimension / cropRadiusOrSize
-            matrix.postScale(canvasScale, canvasScale)
+            // 5. Scale to output dimension
+            val scaleToOutput = outputDimension / max(1f, cropDiameter)
+            matrix.postScale(scaleToOutput, scaleToOutput)
+
+            // 6. Center on output canvas
             matrix.postTranslate(outputDimension / 2f, outputDimension / 2f)
 
             // Draw bitmap

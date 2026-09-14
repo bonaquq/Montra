@@ -98,6 +98,7 @@ import com.example.ui.theme.MontraSurfaceElevated
 import com.example.ui.theme.MontraTextMuted
 import com.example.ui.theme.MontraTextPrimary
 import com.example.ui.theme.MontraTextSecondary
+import com.example.util.AmountInputUtils
 import com.example.util.DateUtils
 import com.example.util.ParsedReceiptData
 import com.example.util.ReceiptParser
@@ -616,7 +617,7 @@ fun AddExpenseScreen(
                         )
                         BasicTextField(
                             value = budgetAmountText,
-                            onValueChange = { budgetAmountText = it.filter { ch -> ch.isDigit() || ch == '.' } },
+                            onValueChange = { budgetAmountText = AmountInputUtils.sanitizeAmount(it) },
                             textStyle = TextStyle(
                                 fontSize = 22.sp,
                                 fontWeight = FontWeight.Bold,
@@ -1157,7 +1158,7 @@ fun AddExpenseScreen(
                     BasicTextField(
                         value = amountText,
                         onValueChange = {
-                            amountText = it
+                            amountText = AmountInputUtils.sanitizeAmount(it)
                             errorMessage = null
                         },
                         textStyle = TextStyle(

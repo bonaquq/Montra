@@ -59,11 +59,15 @@ enum class ExpenseCategory(
     companion object {
         fun fromString(name: String?): ExpenseCategory {
             if (name == null) return OTHER
-            return when (name.uppercase()) {
+            val trimmed = name.trim()
+            return when (trimmed.uppercase()) {
                 "BILLS" -> UTILITIES
                 "SALARY" -> INCOME
                 "INCOME" -> INCOME
-                else -> entries.firstOrNull { it.name.equals(name, ignoreCase = true) } ?: OTHER
+                else -> entries.firstOrNull { 
+                    it.name.equals(trimmed, ignoreCase = true) || 
+                    it.displayName.equals(trimmed, ignoreCase = true) 
+                } ?: OTHER
             }
         }
 

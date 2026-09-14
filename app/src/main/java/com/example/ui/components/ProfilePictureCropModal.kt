@@ -106,6 +106,11 @@ fun ProfilePictureCropModal(
     var panOffsetY by remember { mutableFloatStateOf(0f) }
     var rotationDegrees by remember { mutableFloatStateOf(0f) }
 
+    // Measured Viewport for precise pixel-to-pixel cropping
+    var measuredViewportWidth by remember { mutableFloatStateOf(0f) }
+    var measuredViewportHeight by remember { mutableFloatStateOf(0f) }
+    var measuredCropDiameter by remember { mutableFloatStateOf(0f) }
+
     // Load Bitmap in Background Coroutine
     LaunchedEffect(imageUri) {
         isLoading = true
@@ -209,16 +214,9 @@ fun ProfilePictureCropModal(
                             .border(1.dp, MontraBorder, RoundedCornerShape(18.dp))
                             .pointerInput(Unit) {
                                 detectTransformGestures { _, pan, zoom, _ ->
-                                    zoomScale = (zoomScale * zoom).coerceIn(0.8f, 4.0f)
+                                    zoomScale = (zoomScale * zoom).coerceIn(0.5f, 5.0f)
                                     panOffsetX += pan.x
                                     panOffsetY += pan.y
-                                }
-                            }
-                            .pointerInput(Unit) {
-                                detectDragGestures { change, dragAmount ->
-                                    change.consume()
-                                    panOffsetX += dragAmount.x
-                                    panOffsetY += dragAmount.y
                                 }
                             },
                         contentAlignment = Alignment.Center
@@ -228,6 +226,13 @@ fun ProfilePictureCropModal(
                         val cropCircleDiameter = min(viewWidth, viewHeight) * 0.82f
                         val cropRadius = cropCircleDiameter / 2f
                         val centerOffset = Offset(viewWidth / 2f, viewHeight / 2f)
+
+                        // Update measured dimensions for exact crop output mapping
+                        LaunchedEffect(viewWidth, viewHeight, cropCircleDiameter) {
+                            measuredViewportWidth = viewWidth
+                            measuredViewportHeight = viewHeight
+                            measuredCropDiameter = cropCircleDiameter
+                        }
 
                         Canvas(modifier = Modifier.fillMaxSize()) {
                             // 1. Calculate image base scale
@@ -285,17 +290,25 @@ fun ProfilePictureCropModal(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Filled.ZoomOut,
-                            contentDescription = "Zoom Out",
-                            tint = MontraTextMuted,
-                            modifier = Modifier.size(18.dp)
-                        )
+                        IconButton(
+                            onClick = { zoomScale = (zoomScale - 0.2f).coerceAtLeast(0.5f) },
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(MontraSurfaceElevated)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.ZoomOut,
+                                contentDescription = "Zoom Out",
+                                tint = MontraTextPrimary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
 
                         Slider(
                             value = zoomScale,
                             onValueChange = { zoomScale = it },
-                            valueRange = 0.8f..3.5f,
+                            valueRange = 0.5f..5.0f,
                             modifier = Modifier.weight(1f),
                             colors = SliderDefaults.colors(
                                 thumbColor = MontraIncomeGreen,
@@ -304,12 +317,20 @@ fun ProfilePictureCropModal(
                             )
                         )
 
-                        Icon(
-                            imageVector = Icons.Filled.ZoomIn,
-                            contentDescription = "Zoom In",
-                            tint = MontraTextMuted,
-                            modifier = Modifier.size(18.dp)
-                        )
+                        IconButton(
+                            onClick = { zoomScale = (zoomScale + 0.2f).coerceAtMost(5.0f) },
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(MontraSurfaceElevated)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.ZoomIn,
+                                contentDescription = "Zoom In",
+                                tint = MontraTextPrimary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
 
                         // Rotate 90°
                         IconButton(
@@ -386,6 +407,10 @@ fun ProfilePictureCropModal(
                         onClick = {
                             val bmp = loadedBitmap ?: return@Button
                             isProcessingSave = true
+                            val finalVpWidth = if (measuredViewportWidth > 0f) measuredViewportWidth else 400f
+                            val finalVpHeight = if (measuredViewportHeight > 0f) measuredViewportHeight else 400f
+                            val finalCropDia = if (measuredCropDiameter > 0f) measuredCropDiameter else (finalVpWidth * 0.82f)
+
                             scope.launch {
                                 val savedPath = withContext(Dispatchers.IO) {
                                     ImageCropUtils.cropAndSaveBitmap(
@@ -395,9 +420,9 @@ fun ProfilePictureCropModal(
                                         offsetX = panOffsetX,
                                         offsetY = panOffsetY,
                                         rotationDegrees = rotationDegrees,
-                                        viewportWidth = 400f,
-                                        viewportHeight = 400f,
-                                        cropRadiusOrSize = 400f * 0.82f,
+                                        viewportWidth = finalVpWidth,
+                                        viewportHeight = finalVpHeight,
+                                        cropDiameter = finalCropDia,
                                         outputDimension = 512
                                     )
                                 }

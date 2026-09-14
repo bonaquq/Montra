@@ -31,6 +31,15 @@ class ExpenseRepository(
 
     suspend fun deleteBudget(budget: Budget) = budgetDao.deleteBudget(budget)
 
+    suspend fun getAllBudgetsOnce(): List<Budget> = budgetDao.getAllBudgetsOnce()
+
+    suspend fun deleteBudgetByCategory(category: String) {
+        val existing = budgetDao.getBudgetForCategory(category)
+        if (existing != null) {
+            budgetDao.deleteBudget(existing)
+        }
+    }
+
     suspend fun insertCustomCategory(category: CustomCategory): Long =
         customCategoryDao.insertCategory(category)
 

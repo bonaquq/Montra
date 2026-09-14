@@ -64,6 +64,7 @@ import com.example.ui.theme.MontraSurfaceElevated
 import com.example.ui.theme.MontraTextMuted
 import com.example.ui.theme.MontraTextPrimary
 import com.example.ui.theme.MontraTextSecondary
+import com.example.util.AmountInputUtils
 
 @Composable
 fun AuthScreen(
@@ -274,7 +275,7 @@ fun AuthScreen(
             MontraAuthInputField(
                 label = "Initial Balance",
                 value = initialBalanceText,
-                onValueChange = { initialBalanceText = it },
+                onValueChange = { initialBalanceText = AmountInputUtils.sanitizeAmount(it) },
                 icon = Icons.Filled.AccountBalanceWallet,
                 placeholder = "1000",
                 keyboardType = KeyboardType.Decimal,
@@ -420,9 +421,8 @@ fun AuthScreen(
             }
         }
 
+        // Guest Account Button
         Spacer(modifier = Modifier.height(14.dp))
-
-        // Guest / Skip Button
         OutlinedButton(
             onClick = onContinueAsGuest,
             shape = RoundedCornerShape(16.dp),

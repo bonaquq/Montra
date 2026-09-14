@@ -433,25 +433,30 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
 
         val topCat = summaries.firstOrNull()
 
-        // Budgets status
+        // Budgets status - Accurate current month calculation
+        val currentMonthExpenses = filterByTimeRange(allExpenses, TimeRange.THIS_MONTH).filter { !it.isIncome }
+        val currentMonthTotalSpent = currentMonthExpenses.sumOf { convertAmount(it) }
+
         val statuses = allBudgets.map { b: Budget ->
             val limit = SupportedCurrency.convert(
                 b.monthlyLimit,
                 SupportedCurrency.fromCode(b.currencyCode),
                 currency
             )
-            val spent = if (b.category == "OVERALL") {
-                totalSpentValue
+            val spent = if (b.category.equals("OVERALL", ignoreCase = true)) {
+                currentMonthTotalSpent
             } else {
-                expenseItems.filter {
+                currentMonthExpenses.filter {
                     it.category.equals(b.category, ignoreCase = true) ||
-                    it.expenseCategory.name.equals(b.category, ignoreCase = true)
+                    it.expenseCategory.name.equals(b.category, ignoreCase = true) ||
+                    com.example.data.CategoryRegistry.getCategoryItem(it.category).key.equals(b.category, ignoreCase = true) ||
+                    com.example.data.CategoryRegistry.getCategoryItem(it.category).displayName.equals(b.category, ignoreCase = true)
                 }.sumOf { convertAmount(it) }
             }
             val pct = if (limit > 0) (spent / limit).toFloat() else 0f
             val remaining = (limit - spent).coerceAtLeast(0.0)
 
-            val catDisplayName = if (b.category == "OVERALL") "Overall Budget" else com.example.data.CategoryRegistry.getCategoryItem(b.category).displayName
+            val catDisplayName = if (b.category.equals("OVERALL", ignoreCase = true)) "Overall Budget" else com.example.data.CategoryRegistry.getCategoryItem(b.category).displayName
             BudgetStatus(
                 categoryName = b.category,
                 displayName = catDisplayName,
@@ -468,16 +473,20 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
             val limit = SupportedCurrency.convert(b.monthlyLimit, SupportedCurrency.fromCode(b.currencyCode), currency)
             if (limit <= 0) continue
 
-            val spent = if (b.category == "OVERALL") {
-                totalSpentValue
+            val spent = if (b.category.equals("OVERALL", ignoreCase = true)) {
+                currentMonthTotalSpent
             } else {
-                val cat = ExpenseCategory.fromString(b.category)
-                expenseItems.filter { it.expenseCategory == cat }.sumOf { convertAmount(it) }
+                currentMonthExpenses.filter {
+                    it.category.equals(b.category, ignoreCase = true) ||
+                    it.expenseCategory.name.equals(b.category, ignoreCase = true) ||
+                    com.example.data.CategoryRegistry.getCategoryItem(it.category).key.equals(b.category, ignoreCase = true) ||
+                    com.example.data.CategoryRegistry.getCategoryItem(it.category).displayName.equals(b.category, ignoreCase = true)
+                }.sumOf { convertAmount(it) }
             }
             val pct = (spent / limit).toFloat()
             val isExceeded = spent >= limit
             val isApproaching = !isExceeded && (pct * 100) >= criteria.warningThreshold
-            val catDisplayName = if (b.category == "OVERALL") "Overall Budget" else ExpenseCategory.fromString(b.category).displayName
+            val catDisplayName = if (b.category.equals("OVERALL", ignoreCase = true)) "Overall Budget" else com.example.data.CategoryRegistry.getCategoryItem(b.category).displayName
 
             if (isExceeded) {
                 val overBy = spent - limit
@@ -657,20 +666,23 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
         // Transactions list filter
         val displayedExpenses = allExpenses.filter { expense ->
             val matchesCategory = criteria.categoryFilter == null || expense.expenseCategory == criteria.categoryFilter
+            val matchesType = when (criteria.transFilter.uppercase()) {
+                "EXPENSES" -> !expense.isIncome
+                "INCOME" -> expense.isIncome
+                else -> true
+            }
             val matchesSearch = criteria.search.isBlank() ||
                     expense.title.contains(criteria.search, ignoreCase = true) ||
                     expense.note.contains(criteria.search, ignoreCase = true) ||
                     expense.expenseCategory.displayName.contains(criteria.search, ignoreCase = true)
-            matchesCategory && matchesSearch
+            matchesCategory && matchesType && matchesSearch
         }
 
-        // Account starting balance & total balance
+        // Account starting balance & all-time total balance
         val initialAccBalance = activeAccount?.initialBalance ?: 0.0
-        val calculatedBalance = if (totalIncomeValue > 0) {
-            (initialAccBalance + totalIncomeValue - totalSpentValue).coerceAtLeast(0.0)
-        } else {
-            (initialAccBalance - totalSpentValue).coerceAtLeast(0.0)
-        }
+        val allTimeIncome = allExpenses.filter { it.isIncome }.sumOf { convertAmount(it) }
+        val allTimeSpent = allExpenses.filter { !it.isIncome }.sumOf { convertAmount(it) }
+        val calculatedBalance = (initialAccBalance + allTimeIncome - allTimeSpent).coerceAtLeast(0.0)
 
         ExpenseUiState(
             activeTab = criteria.tab,
@@ -902,9 +914,7 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun logout() {
-        viewModelScope.launch {
-            repository.logout()
-        }
+        logoutAndShowAuth()
     }
 
     fun updateAccount(account: UserAccount) {
@@ -1036,6 +1046,15 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
             repository.setBudget(budget)
             _authUser.value?.let { user ->
                 firestoreService.saveBudget(user.uid, budget)
+            }
+        }
+    }
+
+    fun deleteBudget(category: String) {
+        viewModelScope.launch {
+            repository.deleteBudgetByCategory(category)
+            _authUser.value?.let { user ->
+                firestoreService.deleteBudget(user.uid, category)
             }
         }
     }
@@ -1410,12 +1429,20 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun signInWithGoogle(context: Context) {
+    fun signInWithGoogle(
+        context: Context,
+        email: String = "spidymaadhu2@gmail.com",
+        name: String = "Google User"
+    ) {
         viewModelScope.launch {
             _isAuthLoading.value = true
             _authErrorMessage.value = null
 
-            val res = authService.signInWithGoogle(context)
+            val res = authService.signInWithGoogle(
+                activityContext = context,
+                fallbackEmail = email,
+                fallbackName = name
+            )
             if (res is com.example.auth.AuthResult.Success) {
                 val user = res.user
                 _authUser.value = user
@@ -1423,7 +1450,7 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
                 _isAuthDismissed.value = true
                 prefs.edit().putBoolean("pref_auth_dismissed", true).apply()
 
-                val cleanEmail = user.email ?: "google.user@example.com"
+                val cleanEmail = user.email ?: email
                 val existing = repository.findByEmail(cleanEmail)
                 if (existing != null) {
                     repository.switchAccount(existing.id)
@@ -1502,8 +1529,30 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun dismissAuth() {
-        _isAuthDismissed.value = true
-        prefs.edit().putBoolean("pref_auth_dismissed", true).apply()
+        continueAsGuest()
+    }
+
+    fun continueAsGuest() {
+        viewModelScope.launch {
+            _isAuthDismissed.value = true
+            prefs.edit().putBoolean("pref_auth_dismissed", true).apply()
+            val existing = repository.findByEmail("guest@montra.app")
+            if (existing != null) {
+                repository.switchAccount(existing.id)
+                _selectedCurrency.value = SupportedCurrency.fromCode(existing.currencyCode)
+            } else {
+                val guestAcc = UserAccount(
+                    id = "acc_guest",
+                    name = "Guest User",
+                    email = "guest@montra.app",
+                    pin = "1234",
+                    initialBalance = 0.0,
+                    currencyCode = "USD",
+                    isActive = true
+                )
+                repository.createAccount(guestAcc)
+            }
+        }
     }
 
     fun showAuth() {

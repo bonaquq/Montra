@@ -78,6 +78,7 @@ import com.example.ui.theme.MontraSurfaceElevated
 import com.example.ui.theme.MontraTextMuted
 import com.example.ui.theme.MontraTextPrimary
 import com.example.ui.theme.MontraTextSecondary
+import com.example.util.AmountInputUtils
 import com.example.util.DateUtils
 import com.example.util.FormatUtils
 import java.text.SimpleDateFormat
@@ -428,10 +429,8 @@ fun TransactionDetailModal(
                     OutlinedTextField(
                         value = editAmountText,
                         onValueChange = {
-                            if (it.isEmpty() || it.matches(Regex("^\\d*\\.?\\d{0,2}$"))) {
-                                editAmountText = it
-                                editError = null
-                            }
+                            editAmountText = AmountInputUtils.sanitizeAmount(it)
+                            editError = null
                         },
                         placeholder = { Text("0.00", color = MontraTextMuted) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),

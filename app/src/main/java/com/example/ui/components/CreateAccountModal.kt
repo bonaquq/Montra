@@ -68,6 +68,7 @@ import com.example.ui.theme.MontraSurfaceElevated
 import com.example.ui.theme.MontraTextMuted
 import com.example.ui.theme.MontraTextPrimary
 import com.example.ui.theme.MontraTextSecondary
+import com.example.util.AmountInputUtils
 
 @Composable
 fun CreateAccountModal(
@@ -363,7 +364,7 @@ fun CreateAccountModal(
                 Spacer(modifier = Modifier.height(6.dp))
                 OutlinedTextField(
                     value = balanceText,
-                    onValueChange = { balanceText = it; errorMessage = null },
+                    onValueChange = { balanceText = AmountInputUtils.sanitizeAmount(it); errorMessage = null },
                     placeholder = { Text("0.00", color = MontraTextMuted) },
                     leadingIcon = {
                         Icon(Icons.Filled.AttachMoney, contentDescription = null, tint = MontraTextMuted)

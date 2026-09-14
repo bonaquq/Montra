@@ -77,6 +77,7 @@ import coil.compose.AsyncImage
 import com.example.data.Expense
 import com.example.data.ExpenseCategory
 import com.example.data.SupportedCurrency
+import com.example.util.AmountInputUtils
 import com.example.util.FormatUtils
 import com.example.util.ParsedReceiptData
 import java.util.Calendar
@@ -337,9 +338,7 @@ fun AddEditExpenseSheet(
                         OutlinedTextField(
                             value = amountText,
                             onValueChange = { input ->
-                                if (input.isEmpty() || input.matches(Regex("^\\d*\\.?\\d{0,2}\$"))) {
-                                    amountText = input
-                                }
+                                amountText = AmountInputUtils.sanitizeAmount(input)
                             },
                             placeholder = {
                                 Text(

@@ -64,6 +64,7 @@ fun HomeScreenContent(
     onOpenSettings: () -> Unit,
     onOpenAddExpense: () -> Unit,
     onSeeAllTransactions: () -> Unit,
+    onSeeAllTransactionsWithFilter: (String) -> Unit = {},
     onToggleBalanceVisibility: () -> Unit,
     onExpenseClick: (Expense) -> Unit,
     modifier: Modifier = Modifier
@@ -148,6 +149,7 @@ fun HomeScreenContent(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(20.dp))
+                        .clickable { onSeeAllTransactionsWithFilter("ALL") }
                         .testTag("card_total_balance"),
                     color = MontraSurface,
                     shape = RoundedCornerShape(20.dp),
@@ -213,7 +215,13 @@ fun HomeScreenContent(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             // Left: Total Spent
-                            Column(modifier = Modifier.weight(1f)) {
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { onSeeAllTransactionsWithFilter("EXPENSES") }
+                                    .padding(vertical = 4.dp)
+                            ) {
                                 Text(
                                     text = "Total Spent",
                                     fontSize = 12.sp,
@@ -231,7 +239,11 @@ fun HomeScreenContent(
 
                             // Right: Total Income
                             Column(
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { onSeeAllTransactionsWithFilter("INCOME") }
+                                    .padding(vertical = 4.dp),
                                 horizontalAlignment = Alignment.End
                             ) {
                                 Text(

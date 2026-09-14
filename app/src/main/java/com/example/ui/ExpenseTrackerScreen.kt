@@ -36,6 +36,7 @@ import com.example.ui.components.DeveloperConsoleModal
 import com.example.ui.components.DeveloperPasscodeDialog
 import com.example.ui.components.ExpenseBottomNav
 import com.example.ui.components.HomeScreenContent
+import com.example.ui.components.ManageBudgetsSheet
 import com.example.ui.components.SettingsScreenContent
 import com.example.ui.components.TransactionDetailModal
 import com.example.ui.components.TransactionsScreenContent
@@ -57,6 +58,7 @@ fun ExpenseTrackerScreen(
     var isCreateAccountModalOpen by remember { mutableStateOf(false) }
     var isAccountManageModalOpen by remember { mutableStateOf(false) }
     var isCreateCategoryModalOpen by remember { mutableStateOf(false) }
+    var isManageBudgetsSheetOpen by remember { mutableStateOf(false) }
     var isDeveloperConsoleOpen by remember { mutableStateOf(false) }
     var isDeveloperPasscodeDialogOpen by remember { mutableStateOf(false) }
     var selectedExpenseForDetail by remember { mutableStateOf<Expense?>(null) }
@@ -82,7 +84,7 @@ fun ExpenseTrackerScreen(
                 }
             }
         )
-    } else if (!uiState.isAuthDismissed && uiState.authUser == null) {
+    } else if (uiState.activeAccount == null && uiState.authUser == null || (!uiState.isAuthDismissed && uiState.authUser == null)) {
         AuthScreen(
             onSignIn = { email, pass ->
                 viewModel.signInWithFirebase(email, pass)
@@ -91,7 +93,7 @@ fun ExpenseTrackerScreen(
                 viewModel.signUpWithFirebase(email, pass, name, initialBalance, currency)
             },
             onContinueAsGuest = {
-                viewModel.dismissAuth()
+                viewModel.continueAsGuest()
             },
             onSignInWithGoogle = {
                 viewModel.signInWithGoogle(context)
@@ -178,6 +180,11 @@ fun ExpenseTrackerScreen(
                                         isAddExpenseScreenOpen = true
                                     },
                                     onSeeAllTransactions = {
+                                        viewModel.setTransactionFilter("ALL")
+                                        viewModel.setActiveTab(AppTab.TRANSACTIONS)
+                                    },
+                                    onSeeAllTransactionsWithFilter = { filter ->
+                                        viewModel.setTransactionFilter(filter)
                                         viewModel.setActiveTab(AppTab.TRANSACTIONS)
                                     },
                                     onToggleBalanceVisibility = {
@@ -232,6 +239,9 @@ fun ExpenseTrackerScreen(
                                         val stdCat = ExpenseCategory.fromString(catName)
                                         viewModel.setCategoryFilter(stdCat)
                                         viewModel.setActiveTab(AppTab.TRANSACTIONS)
+                                    },
+                                    onManageBudgets = {
+                                        isManageBudgetsSheetOpen = true
                                     },
                                     onDeleteCustomCategory = { customCat ->
                                         viewModel.deleteCustomCategory(customCat)
@@ -383,6 +393,21 @@ fun ExpenseTrackerScreen(
             onCreateCategory = { name, iconKey, colorHex ->
                 viewModel.createCustomCategory(name, iconKey, colorHex)
             }
+        )
+    }
+
+    // Manage Budgets Modal Sheet
+    if (isManageBudgetsSheetOpen) {
+        ManageBudgetsSheet(
+            budgetStatuses = uiState.budgetStatuses,
+            currency = uiState.selectedCurrency,
+            onSaveBudget = { category, limit ->
+                viewModel.setBudget(category, limit)
+            },
+            onDeleteBudget = { category ->
+                viewModel.deleteBudget(category)
+            },
+            onDismiss = { isManageBudgetsSheetOpen = false }
         )
     }
 

@@ -1,5 +1,7 @@
 package com.example.data
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 
@@ -70,6 +72,18 @@ object CategoryRegistry {
         }
 
         val clean = categoryName.trim()
+        if (clean.equals("OVERALL", ignoreCase = true) || clean.equals("Overall Budget", ignoreCase = true)) {
+            return AppCategoryItem(
+                key = "OVERALL",
+                displayName = "Overall Budget",
+                icon = Icons.Filled.AccountBalanceWallet,
+                color = Color(0xFF6366F1),
+                pastelBg = Color(0xFF6366F1).copy(alpha = 0.15f),
+                isCustom = false,
+                isIncome = false
+            )
+        }
+
         val custom = cachedCustom[clean.lowercase()]
         if (custom != null) {
             val catColor = custom.color
