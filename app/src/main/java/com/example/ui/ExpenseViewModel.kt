@@ -13,7 +13,10 @@ import com.example.data.Expense
 import com.example.data.ExpenseCategory
 import com.example.data.ExpenseDatabase
 import com.example.data.ExpenseRepository
+import com.example.data.ExportHistoryItem
 import com.example.data.SavingsGoal
+import com.example.data.SerialBackupBundle
+import com.example.data.SerialBackupManager
 import com.example.data.SupportedCurrency
 import com.example.data.UserAccount
 import com.example.ui.theme.AppTheme
@@ -301,8 +304,20 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
     private val _biometricErrorMessage = MutableStateFlow<String?>(null)
     val biometricErrorMessage: StateFlow<String?> = _biometricErrorMessage
 
-    private val _isDeveloperUnlocked = MutableStateFlow(false)
+    private val isGuestStartup: Boolean = prefs.getBoolean("pref_is_guest", false)
+    private val initialDevUnlocked: Boolean = if (isGuestStartup) false else prefs.getBoolean("pref_dev_unlocked", false)
+    private val _isDeveloperUnlocked = MutableStateFlow(initialDevUnlocked)
     val isDeveloperUnlocked: StateFlow<Boolean> = _isDeveloperUnlocked
+    private var devUnlockedExplicitlyInSession: Boolean = false
+    private var currentActiveAccount: UserAccount? = null
+
+    private fun isGuestUser(account: UserAccount?, authUser: com.example.auth.AuthUser?): Boolean {
+        if (authUser != null) return false
+        if (account == null) return prefs.getBoolean("pref_is_guest", false)
+        return account.id == "acc_guest" ||
+               account.email.equals("guest@montra.app", ignoreCase = true) ||
+               account.name.equals("Guest User", ignoreCase = true)
+    }
 
     private data class AuthState(
         val user: com.example.auth.AuthUser?,
@@ -333,9 +348,31 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
                 _authUser.value = user
                 if (user != null) {
                     _isAuthDismissed.value = true
+                    prefs.edit().putBoolean("pref_is_guest", false).apply()
                     syncDataWithFirestore(user.uid)
                 } else {
                     firestoreService.stopListeners()
+                }
+            }
+        }
+        viewModelScope.launch {
+            repository.activeAccount.collect { account ->
+                currentActiveAccount = account
+                val isGuest = isGuestUser(account, _authUser.value)
+                prefs.edit().putBoolean("pref_is_guest", isGuest).apply()
+                if (isGuest) {
+                    // In guest mode, dev mode locks by itself on app reopen
+                    if (!devUnlockedExplicitlyInSession) {
+                        _isDeveloperUnlocked.value = false
+                        prefs.edit().putBoolean("pref_dev_unlocked", false).apply()
+                    }
+                } else {
+                    // In account mode, dev mode persists across app restarts if enabled
+                    val savedDevPref = prefs.getBoolean("pref_dev_unlocked", false)
+                    if (savedDevPref || devUnlockedExplicitlyInSession) {
+                        _isDeveloperUnlocked.value = true
+                        prefs.edit().putBoolean("pref_dev_unlocked", true).apply()
+                    }
                 }
             }
         }
@@ -920,7 +957,16 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = ExpenseUiState(isLoading = true)
+        initialValue = ExpenseUiState(
+            isLoading = true,
+            isAuthDismissed = prefs.getBoolean("pref_auth_dismissed", false),
+            authUser = authService.currentUser,
+            appTheme = initialTheme,
+            isDarkMode = initialTheme.isDark,
+            isBiometricEnabled = prefs.getBoolean("pref_biometric_enabled", false),
+            isAppUnlocked = !prefs.getBoolean("pref_biometric_enabled", false),
+            isDeveloperUnlocked = initialDevUnlocked
+        )
     )
 
     fun setActiveTab(tab: AppTab) {
@@ -1129,6 +1175,10 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
             )
             repository.createAccount(newAccount)
             _selectedCurrency.value = SupportedCurrency.fromCode(currency)
+            prefs.edit().putBoolean("pref_is_guest", false).apply()
+            if (_isDeveloperUnlocked.value) {
+                prefs.edit().putBoolean("pref_dev_unlocked", true).apply()
+            }
             _authUser.value?.let { user ->
                 firestoreService.saveUserAccount(user.uid, newAccount)
             }
@@ -1138,6 +1188,18 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
     fun switchAccount(accountId: String) {
         viewModelScope.launch {
             repository.switchAccount(accountId)
+            val acc = repository.getActiveAccountOnce()
+            val isGuest = isGuestUser(acc, _authUser.value)
+            prefs.edit().putBoolean("pref_is_guest", isGuest).apply()
+            if (isGuest) {
+                devUnlockedExplicitlyInSession = false
+                _isDeveloperUnlocked.value = false
+                prefs.edit().putBoolean("pref_dev_unlocked", false).apply()
+            } else {
+                if (prefs.getBoolean("pref_dev_unlocked", false)) {
+                    _isDeveloperUnlocked.value = true
+                }
+            }
         }
     }
 
@@ -1561,6 +1623,11 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
                 _isAuthLoading.value = false
                 _isAuthDismissed.value = true
                 prefs.edit().putBoolean("pref_auth_dismissed", true).apply()
+                prefs.edit().putBoolean("pref_is_guest", false).apply()
+                if (prefs.getBoolean("pref_dev_unlocked", false) || _isDeveloperUnlocked.value) {
+                    _isDeveloperUnlocked.value = true
+                    prefs.edit().putBoolean("pref_dev_unlocked", true).apply()
+                }
 
                 val existing = repository.findByEmail(cleanEmail)
                 if (existing != null) {
@@ -1597,6 +1664,11 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
                     _isAuthLoading.value = false
                     _isAuthDismissed.value = true
                     prefs.edit().putBoolean("pref_auth_dismissed", true).apply()
+                    prefs.edit().putBoolean("pref_is_guest", false).apply()
+                    if (prefs.getBoolean("pref_dev_unlocked", false) || _isDeveloperUnlocked.value) {
+                        _isDeveloperUnlocked.value = true
+                        prefs.edit().putBoolean("pref_dev_unlocked", true).apply()
+                    }
                 } else {
                     _isAuthLoading.value = false
                     _authErrorMessage.value = "Incorrect password. Please check and try again."
@@ -1662,6 +1734,10 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
             _isAuthLoading.value = false
             _isAuthDismissed.value = true
             prefs.edit().putBoolean("pref_auth_dismissed", true).apply()
+            prefs.edit().putBoolean("pref_is_guest", false).apply()
+            if (_isDeveloperUnlocked.value) {
+                prefs.edit().putBoolean("pref_dev_unlocked", true).apply()
+            }
             syncDataWithFirestore(uid)
         }
     }
@@ -1715,6 +1791,11 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
         _isAuthLoading.value = false
         _isAuthDismissed.value = true
         prefs.edit().putBoolean("pref_auth_dismissed", true).apply()
+        prefs.edit().putBoolean("pref_is_guest", false).apply()
+        if (prefs.getBoolean("pref_dev_unlocked", false) || _isDeveloperUnlocked.value) {
+            _isDeveloperUnlocked.value = true
+            prefs.edit().putBoolean("pref_dev_unlocked", true).apply()
+        }
 
         val cleanEmail = user.email ?: "user@montra.app"
         val existing = repository.findByEmail(cleanEmail)
@@ -1781,7 +1862,11 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
             _authUser.value = null
             _authErrorMessage.value = null
             _isAuthDismissed.value = false
+            devUnlockedExplicitlyInSession = false
+            _isDeveloperUnlocked.value = false
             prefs.edit().putBoolean("pref_auth_dismissed", false).apply()
+            prefs.edit().putBoolean("pref_dev_unlocked", false).apply()
+            prefs.edit().putBoolean("pref_is_guest", false).apply()
         }
     }
 
@@ -1797,6 +1882,11 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             _isAuthDismissed.value = true
             prefs.edit().putBoolean("pref_auth_dismissed", true).apply()
+            prefs.edit().putBoolean("pref_is_guest", true).apply()
+            // In guest mode, dev mode locks and does not persist across restarts
+            devUnlockedExplicitlyInSession = false
+            _isDeveloperUnlocked.value = false
+            prefs.edit().putBoolean("pref_dev_unlocked", false).apply()
             val existing = repository.findByEmail("guest@montra.app")
             if (existing != null) {
                 repository.switchAccount(existing.id)
@@ -1929,6 +2019,21 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
     // Developer Mode Operations
     fun setDeveloperUnlocked(unlocked: Boolean) {
         _isDeveloperUnlocked.value = unlocked
+        if (unlocked) {
+            devUnlockedExplicitlyInSession = true
+            val isGuest = isGuestUser(currentActiveAccount, _authUser.value)
+            if (!isGuest) {
+                // User has created an account: persist developer mode so it won't be disabled when closing the app
+                prefs.edit().putBoolean("pref_dev_unlocked", true).apply()
+            } else {
+                // In guest mode, do not persist so it can lock by itself when app reopens
+                prefs.edit().putBoolean("pref_dev_unlocked", false).apply()
+            }
+        } else {
+            // Disabled/locked explicitly by the user: stays locked
+            devUnlockedExplicitlyInSession = false
+            prefs.edit().putBoolean("pref_dev_unlocked", false).apply()
+        }
     }
 
     fun injectDeveloperSampleData() {
@@ -2050,5 +2155,146 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
 
     fun simulateReceiptScan() {
         simulateBankStatementScan("BML")
+    }
+
+    // Serial Backup & Import / Export Feature
+    fun exportDataToSerial(
+        onComplete: (Boolean, String, SerialBackupBundle?) -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                val acc = repository.getActiveAccountOnce()
+                val expenses = repository.getAllExpensesOnce()
+                val budgets = repository.getAllBudgetsOnce()
+                val customCats = repository.getAllCustomCategoriesOnce()
+                val serialKey = SerialBackupManager.generateRandomSerial()
+
+                val bundle = SerialBackupBundle(
+                    serialKey = serialKey,
+                    authorName = acc?.name ?: _authUser.value?.displayName ?: "Montra User",
+                    authorEmail = acc?.email ?: _authUser.value?.email ?: "",
+                    timestamp = System.currentTimeMillis(),
+                    initialBalance = acc?.initialBalance ?: 0.0,
+                    currencyCode = _selectedCurrency.value.code,
+                    expenses = expenses,
+                    budgets = budgets,
+                    customCategories = customCats
+                )
+
+                val result = SerialBackupManager.exportSerialBackup(getApplication(), bundle)
+                if (result.isSuccess) {
+                    val finalSerial = result.getOrNull() ?: serialKey
+                    val finalBundle = bundle.copy(serialKey = finalSerial)
+                    onComplete(true, finalSerial, finalBundle)
+                } else {
+                    onComplete(false, result.exceptionOrNull()?.message ?: "Export failed", null)
+                }
+            } catch (e: Exception) {
+                onComplete(false, e.message ?: "Failed to generate serial export", null)
+            }
+        }
+    }
+
+    fun fetchSerialBackup(
+        serialInput: String,
+        onComplete: (Result<SerialBackupBundle>) -> Unit
+    ) {
+        viewModelScope.launch {
+            var result = SerialBackupManager.fetchSerialBackup(getApplication(), serialInput)
+            if (result.isFailure) {
+                // Safety net: check if user exported this on their device in previous turns or sessions
+                val history = SerialBackupManager.getExportHistory(getApplication())
+                val cleanInput = SerialBackupManager.extractRawId(serialInput)
+                val matchesHistory = history.any {
+                    it.serialKey.equals(serialInput.trim(), ignoreCase = true) ||
+                    SerialBackupManager.extractRawId(it.serialKey).equals(cleanInput, ignoreCase = true)
+                }
+                if (matchesHistory) {
+                    try {
+                        val acc = repository.getActiveAccountOnce()
+                        val expenses = repository.getAllExpensesOnce()
+                        val budgets = repository.getAllBudgetsOnce()
+                        val customCats = repository.getAllCustomCategoriesOnce()
+                        val recoveredBundle = SerialBackupBundle(
+                            serialKey = serialInput.trim().uppercase(),
+                            authorName = acc?.name ?: _authUser.value?.displayName ?: "Montra User",
+                            authorEmail = acc?.email ?: "",
+                            timestamp = System.currentTimeMillis(),
+                            initialBalance = acc?.initialBalance ?: 0.0,
+                            currencyCode = _selectedCurrency.value.code,
+                            expenses = expenses,
+                            budgets = budgets,
+                            customCategories = customCats
+                        )
+                        SerialBackupManager.cacheBundleLocally(getApplication(), recoveredBundle)
+                        result = Result.success(recoveredBundle)
+                    } catch (_: Exception) {}
+                }
+            }
+            onComplete(result)
+        }
+    }
+
+    fun importDataFromSerial(
+        bundle: SerialBackupBundle,
+        onComplete: (Boolean, String, Int) -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                var addedCount = 0
+                val currentExpenses = repository.getAllExpensesOnce()
+
+                // Insert/Add expenses
+                bundle.expenses.forEach { exp ->
+                    // Avoid duplicating exact transaction if it already exists with same amount, title, and timestamp
+                    val isDuplicate = currentExpenses.any {
+                        it.title.equals(exp.title, ignoreCase = true) &&
+                        it.amount == exp.amount &&
+                        Math.abs(it.dateMillis - exp.dateMillis) < 60000L
+                    }
+                    if (!isDuplicate) {
+                        repository.insert(exp.copy(id = 0L))
+                        _authUser.value?.let { user ->
+                            firestoreService.saveExpense(user.uid, exp)
+                        }
+                        addedCount++
+                    }
+                }
+
+                // Insert/Merge budgets
+                bundle.budgets.forEach { b ->
+                    repository.setBudget(b)
+                    _authUser.value?.let { user ->
+                        firestoreService.saveBudget(user.uid, b)
+                    }
+                }
+
+                // Insert custom categories
+                val existingCats = repository.getAllCustomCategoriesOnce()
+                bundle.customCategories.forEach { cat ->
+                    if (existingCats.none { it.name.equals(cat.name, ignoreCase = true) }) {
+                        repository.insertCustomCategory(cat.copy(id = 0L))
+                        _authUser.value?.let { user ->
+                            firestoreService.saveCustomCategory(user.uid, cat)
+                        }
+                    }
+                }
+
+                onComplete(true, "Successfully added $addedCount transaction(s) and budget data from serial ${bundle.serialKey}!", addedCount)
+            } catch (e: Exception) {
+                onComplete(false, e.message ?: "Failed to import data", 0)
+            }
+        }
+    }
+
+    fun getExportHistory(): List<ExportHistoryItem> {
+        return SerialBackupManager.getExportHistory(getApplication())
+    }
+
+    fun resetAllCategoryBudgetsToZero(onComplete: () -> Unit = {}) {
+        viewModelScope.launch {
+            repository.resetAllCategoryBudgetsToZero()
+            onComplete()
+        }
     }
 }

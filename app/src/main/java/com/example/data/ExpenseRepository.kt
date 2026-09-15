@@ -98,6 +98,8 @@ class ExpenseRepository(
         userAccountDao.resetAllBalances()
     }
 
+    suspend fun resetAllCategoryBudgetsToZero() = budgetDao.resetAllBudgetsToZero()
+
     suspend fun seedInitialDataIfEmpty() {
         // Reset any legacy demo balances or demo accounts from earlier releases
         resetDemoAccountAndBalances()
@@ -109,7 +111,7 @@ class ExpenseRepository(
                 email = "user@montra.app",
                 pin = "1234",
                 initialBalance = 0.0,
-                currencyCode = "USD",
+                currencyCode = "MVR",
                 isActive = true
             )
             userAccountDao.insertAccount(defaultAccount)
@@ -118,14 +120,17 @@ class ExpenseRepository(
         // Clean up any legacy demo expenses from previous app versions
         expenseDao.deleteDemoExpenses()
 
+        // Reset any previous non-zero demo/template category budget values to 0.0
+        budgetDao.resetLegacyDefaultBudgets()
+
         if (budgetDao.getAllBudgetsOnce().isEmpty()) {
             val initialBudgets = listOf(
-                Budget(category = "OVERALL", monthlyLimit = 1500.0, currencyCode = "USD"),
-                Budget(category = ExpenseCategory.RENT.name, monthlyLimit = 850.0, currencyCode = "USD"),
-                Budget(category = ExpenseCategory.FOOD.name, monthlyLimit = 200.0, currencyCode = "USD"),
-                Budget(category = ExpenseCategory.UTILITIES.name, monthlyLimit = 150.0, currencyCode = "USD"),
-                Budget(category = ExpenseCategory.TRANSPORT.name, monthlyLimit = 60.0, currencyCode = "USD"),
-                Budget(category = ExpenseCategory.SHOPPING.name, monthlyLimit = 100.0, currencyCode = "USD")
+                Budget(category = "OVERALL", monthlyLimit = 0.0, currencyCode = "MVR"),
+                Budget(category = ExpenseCategory.RENT.name, monthlyLimit = 0.0, currencyCode = "MVR"),
+                Budget(category = ExpenseCategory.FOOD.name, monthlyLimit = 0.0, currencyCode = "MVR"),
+                Budget(category = ExpenseCategory.UTILITIES.name, monthlyLimit = 0.0, currencyCode = "MVR"),
+                Budget(category = ExpenseCategory.TRANSPORT.name, monthlyLimit = 0.0, currencyCode = "MVR"),
+                Budget(category = ExpenseCategory.SHOPPING.name, monthlyLimit = 0.0, currencyCode = "MVR")
             )
             budgetDao.insertBudgets(initialBudgets)
         }

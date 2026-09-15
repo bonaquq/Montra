@@ -28,6 +28,12 @@ interface BudgetDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertBudgets(budgets: List<Budget>)
 
+    @Query("UPDATE budgets SET monthlyLimit = 0.0 WHERE monthlyLimit IN (1500.0, 850.0, 200.0, 150.0, 60.0, 100.0)")
+    suspend fun resetLegacyDefaultBudgets()
+
+    @Query("UPDATE budgets SET monthlyLimit = 0.0")
+    suspend fun resetAllBudgetsToZero()
+
     @Delete
     suspend fun deleteBudget(budget: Budget)
 }

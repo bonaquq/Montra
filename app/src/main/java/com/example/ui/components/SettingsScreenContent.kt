@@ -37,6 +37,8 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -100,6 +102,10 @@ fun SettingsScreenContent(
     onToggleBiometric: (Boolean) -> Unit = {},
     onLockAppNow: () -> Unit = {},
     onClearAllTransactions: () -> Unit = {},
+    onOpenSerialTransfer: () -> Unit = {},
+    onResetAllBudgetsToZero: () -> Unit = {},
+    onUnlockDeveloperMode: (Boolean) -> Unit = {},
+    onOpenDeveloperConsole: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -109,6 +115,9 @@ fun SettingsScreenContent(
     var isThemePickerOpen by remember { mutableStateOf(false) }
     var isAboutDialogOpen by remember { mutableStateOf(false) }
     var isClearDataDialogOpen by remember { mutableStateOf(false) }
+    var isResetBudgetsDialogOpen by remember { mutableStateOf(false) }
+    var isDeveloperPasscodeDialogOpen by remember { mutableStateOf(false) }
+    var pendingDeveloperAction by remember { mutableStateOf<(() -> Unit)?>(null) }
 
     Column(
         modifier = modifier
@@ -358,6 +367,38 @@ fun SettingsScreenContent(
                     Spacer(modifier = Modifier.height(10.dp))
                 }
 
+                if (uiState.isDeveloperUnlocked) {
+                    SettingsItemRow(
+                        icon = Icons.Filled.SwapHoriz,
+                        title = "Import / Export Data",
+                        value = null,
+                        badgeText = "DEV",
+                        onClick = onOpenSerialTransfer,
+                        modifier = Modifier.testTag("item_settings_serial_backup")
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    SettingsItemRow(
+                        icon = Icons.Filled.RestartAlt,
+                        title = "Reset Category Budgets",
+                        value = null,
+                        badgeText = "DEV",
+                        onClick = { isResetBudgetsDialogOpen = true },
+                        modifier = Modifier.testTag("item_settings_reset_budgets")
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    SettingsItemRow(
+                        icon = Icons.Filled.Terminal,
+                        title = "Developer Console",
+                        value = "Unlocked",
+                        badgeText = "DEV",
+                        onClick = onOpenDeveloperConsole,
+                        modifier = Modifier.testTag("item_settings_dev_console")
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                }
+
                 SettingsItemRow(
                     icon = Icons.Filled.DeleteSweep,
                     title = "Clear All Transactions",
@@ -588,6 +629,10 @@ fun SettingsScreenContent(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(6.dp))
                                     .background(Color(0xFF2563EB))
+                                    .clickable {
+                                        isAboutDialogOpen = false
+                                        isDeveloperPasscodeDialogOpen = true
+                                    }
                                     .padding(horizontal = 6.dp, vertical = 2.dp)
                                     .testTag("badge_about_beta")
                             ) {
@@ -752,6 +797,62 @@ fun SettingsScreenContent(
             shape = RoundedCornerShape(20.dp)
         )
     }
+
+    if (isResetBudgetsDialogOpen) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { isResetBudgetsDialogOpen = false },
+            title = {
+                Text(
+                    text = "Reset Category Budgets",
+                    fontWeight = FontWeight.Bold,
+                    color = MontraTextPrimary
+                )
+            },
+            text = {
+                Text(
+                    text = "This will reset the monthly budget limit for all categories (Food, Rent, Utilities, Transport, Shopping, etc.) to 0.0 as requested.",
+                    color = MontraTextSecondary,
+                    fontSize = 14.sp
+                )
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = {
+                        isResetBudgetsDialogOpen = false
+                        onResetAllBudgetsToZero()
+                    },
+                    modifier = Modifier.testTag("btn_confirm_reset_budgets")
+                ) {
+                    Text("Reset to 0", color = Color(0xFFEF4444), fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = { isResetBudgetsDialogOpen = false }
+                ) {
+                    Text("Cancel", color = MontraTextSecondary)
+                }
+            },
+            containerColor = MontraSurface,
+            shape = RoundedCornerShape(20.dp)
+        )
+    }
+
+    if (isDeveloperPasscodeDialogOpen) {
+        DeveloperPasscodeDialog(
+            onDismiss = {
+                isDeveloperPasscodeDialogOpen = false
+                pendingDeveloperAction = null
+            },
+            onCodeVerified = {
+                onUnlockDeveloperMode(true)
+                isDeveloperPasscodeDialogOpen = false
+                val action = pendingDeveloperAction
+                pendingDeveloperAction = null
+                action?.invoke()
+            }
+        )
+    }
 }
 
 @Composable
@@ -796,7 +897,8 @@ private fun SettingsItemRow(
     title: String,
     value: String?,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    badgeText: String? = null
 ) {
     Row(
         modifier = modifier
@@ -810,7 +912,8 @@ private fun SettingsItemRow(
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            modifier = Modifier.weight(1f, fill = false)
         ) {
             Box(
                 modifier = Modifier
@@ -827,12 +930,34 @@ private fun SettingsItemRow(
                 )
             }
 
-            Text(
-                text = title,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Medium,
-                color = MontraTextPrimary
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = title,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MontraTextPrimary
+                )
+
+                if (badgeText != null) {
+                    Surface(
+                        color = Color(0xFF6366F1).copy(alpha = 0.22f),
+                        border = BorderStroke(1.dp, Color(0xFF818CF8)),
+                        shape = RoundedCornerShape(6.dp)
+                    ) {
+                        Text(
+                            text = badgeText,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = 0.6.sp,
+                            color = Color(0xFFA5B4FC),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+            }
         }
 
         Row(

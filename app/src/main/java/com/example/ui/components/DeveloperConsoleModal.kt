@@ -52,6 +52,8 @@ import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -101,16 +103,10 @@ import com.example.ui.theme.MontraTextPrimary
 import com.example.ui.theme.MontraTextSecondary
 
 /**
- * Valid developer authorization access codes (case-insensitive).
+ * Valid developer authorization access code.
  */
 private val VALID_DEV_CODES = setOf(
-    "1337",
-    "DEV1337",
-    "DEV777",
-    "4242",
-    "MONTRA2026",
-    "0000",
-    "ADMIN"
+    "0902"
 )
 
 /**
@@ -220,7 +216,7 @@ fun DeveloperPasscodeDialog(
                     isError = errorMessage != null,
                     visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Ascii,
+                        keyboardType = KeyboardType.NumberPassword,
                         imeAction = ImeAction.Done
                     ),
                     keyboardActions = KeyboardActions(
@@ -319,13 +315,15 @@ fun DeveloperPasscodeDialog(
 fun DeveloperConsoleModal(
     uiState: ExpenseUiState,
     onDismiss: () -> Unit,
-    onLockDeveloperMode: () -> Unit,
+    onLockDeveloperMode: (() -> Unit)? = null,
     onInjectSampleData: () -> Unit,
     onInjectSingleTransaction: (title: String, amount: Double, category: String, isIncome: Boolean) -> Unit,
     onSimulateReceipt: () -> Unit,
     onClearAllTransactions: () -> Unit,
     onScanReceiptUri: ((Uri) -> Unit)? = null,
     onOpenAddExpenseWithScan: (() -> Unit)? = null,
+    onOpenSerialTransfer: (() -> Unit)? = null,
+    onResetAllBudgetsToZero: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -649,7 +647,54 @@ fun DeveloperConsoleModal(
                         }
                     }
 
-                    // Section 4: State Inspector & Diagnostics JSON
+                    // Section 4: Serial Transfer & Category Budgets
+                    DevSectionCard(title = "Data Transfer & Category Budgets", icon = Icons.Filled.SwapHoriz) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                text = "Transfer encrypted ledger backups via serial number or reset category budget thresholds to 0.",
+                                fontSize = 12.sp,
+                                color = MontraTextSecondary
+                            )
+
+                            if (onOpenSerialTransfer != null) {
+                                Button(
+                                    onClick = {
+                                        onDismiss()
+                                        onOpenSerialTransfer()
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFF6366F1),
+                                        contentColor = Color.White
+                                    ),
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(Icons.Filled.SwapHoriz, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Open Serial Backup & Transfer", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                }
+                            }
+
+                            if (onResetAllBudgetsToZero != null) {
+                                OutlinedButton(
+                                    onClick = {
+                                        onResetAllBudgetsToZero()
+                                        Toast.makeText(context, "Reset all category budgets to 0", Toast.LENGTH_SHORT).show()
+                                    },
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFF59E0B)),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.5f)),
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(Icons.Filled.RestartAlt, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Reset All Category Budgets to 0", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                }
+                            }
+                        }
+                    }
+
+                    // Section 5: State Inspector & Diagnostics JSON
                     DevSectionCard(title = "Diagnostics Payload & State", icon = Icons.Filled.Code) {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Row(
@@ -701,45 +746,93 @@ fun DeveloperConsoleModal(
                             }
                         }
                     }
+
+                    // Section 6: Lock Developer Mode Box
+                    if (onLockDeveloperMode != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(MontraSurfaceElevated)
+                                .border(1.dp, Color(0xFFEF4444).copy(alpha = 0.35f), RoundedCornerShape(16.dp))
+                                .padding(16.dp)
+                                .testTag("box_lock_developer_mode")
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Lock,
+                                        contentDescription = null,
+                                        tint = Color(0xFFEF4444),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Text(
+                                        text = "Lock Developer Mode",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MontraTextPrimary
+                                    )
+                                }
+
+                                Text(
+                                    text = "Lock and exit Developer Mode. You will need to re-verify the developer passcode to access developer tools again.",
+                                    fontSize = 12.sp,
+                                    color = MontraTextSecondary,
+                                    lineHeight = 16.sp
+                                )
+
+                                OutlinedButton(
+                                    onClick = {
+                                        onLockDeveloperMode()
+                                        Toast.makeText(context, "Developer Mode Locked", Toast.LENGTH_SHORT).show()
+                                        onDismiss()
+                                    },
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        contentColor = Color(0xFFEF4444)
+                                    ),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.5f)),
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(44.dp)
+                                        .testTag("btn_lock_developer_mode")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Lock,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Lock Developer Mode",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Bottom Session Actions: Lock Dev Mode
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                // Bottom Session Action
+                Button(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MontraButtonBg,
+                        contentColor = MontraTextPrimary
+                    ),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .testTag("btn_dev_console_done")
                 ) {
-                    OutlinedButton(
-                        onClick = {
-                            onLockDeveloperMode()
-                            Toast.makeText(context, "Developer Mode Locked", Toast.LENGTH_SHORT).show()
-                            onDismiss()
-                        },
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(48.dp)
-                            .testTag("btn_lock_dev_mode")
-                    ) {
-                        Icon(Icons.Filled.Lock, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Lock Dev Mode", fontSize = 13.sp, color = MontraTextSecondary)
-                    }
-
-                    Button(
-                        onClick = onDismiss,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MontraButtonBg,
-                            contentColor = MontraTextPrimary
-                        ),
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(48.dp)
-                    ) {
-                        Text("Done", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                    }
+                    Text("Done", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }

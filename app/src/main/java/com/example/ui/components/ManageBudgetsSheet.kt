@@ -77,8 +77,8 @@ fun ManageBudgetsSheet(
     // Pre-populate overall limit
     val daysInMonth = remember { java.util.Calendar.getInstance().getActualMaximum(java.util.Calendar.DAY_OF_MONTH).coerceAtLeast(1) }
     var isDailyOverall by remember { mutableStateOf(false) }
-    val overallLimit = budgetStatuses.firstOrNull { it.categoryName.equals("OVERALL", ignoreCase = true) }?.monthlyLimit ?: 1500.0
-    var overallInput by remember { mutableStateOf(String.format(Locale.US, "%.0f", overallLimit)) }
+    val overallLimit = budgetStatuses.firstOrNull { it.categoryName.equals("OVERALL", ignoreCase = true) }?.monthlyLimit ?: 0.0
+    var overallInput by remember { mutableStateOf(if (overallLimit > 0) String.format(Locale.US, "%.0f", overallLimit) else "0") }
 
     // All category items (standard + custom)
     val allCategories = remember { CategoryRegistry.getExpenseCategoryItems() }
@@ -90,7 +90,7 @@ fun ManageBudgetsSheet(
                     it.categoryName.equals(cat.key, ignoreCase = true) || 
                     it.categoryName.equals(cat.displayName, ignoreCase = true) 
                 }?.monthlyLimit
-                put(cat.key, if (current != null && current > 0) String.format(Locale.US, "%.0f", current) else "")
+                put(cat.key, if (current != null && current > 0) String.format(Locale.US, "%.0f", current) else "0")
             }
         }
     }
@@ -393,7 +393,7 @@ fun ManageBudgetsSheet(
             // Save Button
             Button(
                 onClick = {
-                    val rawVal = overallInput.toDoubleOrNull() ?: if (isDailyOverall) 50.0 else 1500.0
+                    val rawVal = overallInput.toDoubleOrNull() ?: 0.0
                     val overallVal = if (isDailyOverall) rawVal * daysInMonth else rawVal
                     onSaveBudget("OVERALL", overallVal)
                     allCategories.forEach { cat ->

@@ -37,6 +37,7 @@ import com.example.ui.components.DeveloperPasscodeDialog
 import com.example.ui.components.ExpenseBottomNav
 import com.example.ui.components.HomeScreenContent
 import com.example.ui.components.ManageBudgetsSheet
+import com.example.ui.components.SerialBackupDialog
 import com.example.ui.components.SettingsScreenContent
 import com.example.ui.components.TransactionDetailModal
 import com.example.ui.components.TransactionsScreenContent
@@ -63,6 +64,7 @@ fun ExpenseTrackerScreen(
     var isDeveloperPasscodeDialogOpen by remember { mutableStateOf(false) }
     var selectedExpenseForDetail by remember { mutableStateOf<Expense?>(null) }
     var isGoogleLoginModalOpen by remember { mutableStateOf(false) }
+    var isSerialBackupSheetOpen by remember { mutableStateOf(false) }
 
     val openDeveloperFlow = {
         if (uiState.isDeveloperUnlocked) {
@@ -72,7 +74,13 @@ fun ExpenseTrackerScreen(
         }
     }
 
-    if (uiState.isBiometricEnabled && !uiState.isAppUnlocked) {
+    if (uiState.isLoading) {
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .background(MontraBackground)
+        )
+    } else if (uiState.isBiometricEnabled && !uiState.isAppUnlocked) {
         BiometricLockScreen(
             uiState = uiState,
             onUnlockSuccess = {
@@ -85,7 +93,7 @@ fun ExpenseTrackerScreen(
                 }
             }
         )
-    } else if (uiState.activeAccount == null && uiState.authUser == null || (!uiState.isAuthDismissed && uiState.authUser == null)) {
+    } else if (uiState.authUser == null && (!uiState.isAuthDismissed || uiState.activeAccount == null)) {
         AuthScreen(
             onSignIn = { email, pass ->
                 viewModel.signInWithFirebase(email, pass)
@@ -303,7 +311,17 @@ fun ExpenseTrackerScreen(
                                     },
                                     onClearAllTransactions = {
                                         viewModel.deleteAllTransactions()
-                                    }
+                                    },
+                                    onOpenSerialTransfer = {
+                                        isSerialBackupSheetOpen = true
+                                    },
+                                    onResetAllBudgetsToZero = {
+                                        viewModel.resetAllCategoryBudgetsToZero()
+                                    },
+                                    onUnlockDeveloperMode = { unlocked ->
+                                        viewModel.setDeveloperUnlocked(unlocked)
+                                    },
+                                    onOpenDeveloperConsole = openDeveloperFlow
                                 )
                             }
                             else -> {
@@ -477,7 +495,22 @@ fun ExpenseTrackerScreen(
             },
             onClearAllTransactions = {
                 viewModel.deleteAllTransactions()
+            },
+            onOpenSerialTransfer = {
+                isSerialBackupSheetOpen = true
+            },
+            onResetAllBudgetsToZero = {
+                viewModel.resetAllCategoryBudgetsToZero()
             }
+        )
+    }
+
+    // Serial Backup & Import/Export Modal Sheet
+    if (isSerialBackupSheetOpen) {
+        SerialBackupDialog(
+            uiState = uiState,
+            viewModel = viewModel,
+            onDismiss = { isSerialBackupSheetOpen = false }
         )
     }
 }
